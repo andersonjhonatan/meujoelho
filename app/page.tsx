@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getDemoUser, getDashboardSummary, getStreak } from "@/lib/data";
+import { getDemoUser, getDashboardSummary, getStreak, getCurrentPhase, getTodaysTemplate } from "@/lib/data";
 
 export const dynamic = "force-dynamic";
 
@@ -12,7 +12,12 @@ export default async function DashboardPage() {
       </div>
     );
   }
-  const [summary, streak] = await Promise.all([getDashboardSummary(user.id), getStreak(user.id)]);
+  const [summary, streak, phaseInfo, template] = await Promise.all([
+    getDashboardSummary(user.id),
+    getStreak(user.id),
+    getCurrentPhase(user.id),
+    getTodaysTemplate(user.id),
+  ]);
 
   return (
     <div className="space-y-5 pb-4">
@@ -20,6 +25,14 @@ export default async function DashboardPage() {
         <p className="text-sm text-gray-500">Olá, {user.name} 👋</p>
         <h1 className="text-2xl font-bold text-navy">Como está o joelho hoje?</h1>
       </header>
+
+      <div className="bg-navy rounded-xl p-4">
+        <p className="text-[11px] font-semibold text-white/60 uppercase mb-1">{phaseInfo.label}</p>
+        <p className="text-white text-sm">
+          Sessão de hoje: <span className="font-bold">{template}</span> · semana {phaseInfo.weeksSinceStart + 1} no
+          protocolo
+        </p>
+      </div>
 
       <div className="grid grid-cols-2 gap-3">
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">

@@ -54,19 +54,44 @@ model Exercise {
   order          Int
   name           String
   category       ExerciseCategory
-  imageUrl       String
+  imageUrl       String           // ilustração customizada (fallback sempre seguro)
   sets           String
   reps           String
   targetMuscles  String
   maxFlexionDeg  Int?             // amplitude máxima segura (null = sem restrição de flexão)
   isIsometric    Boolean          @default(false)
-  holdSeconds    Int?             // duração da sustentação, se isométrico
+  holdSeconds    Int?             // duração base da sustentação, se isométrico
   execution      String[]         // passo a passo
   careNote       String           @db.Text
 
+  // --- Sistema de progressão / variedade clínica ---
+  anchor         Boolean          @default(false) // true = presente em toda sessão (proteção patelar/core)
+  templateGroup  String?          // "A" | "B" — sessão em que aparece quando não é âncora
+  phaseMin       Int              @default(1)     // fase (1/2/3) em que o exercício é liberado
+  progression    Json             // { "1": {sets, reps, hold}, "2": {...}, "3": {...} }
+
+  // --- Mídia externa (wger) ---
+  wgerSearchTerm String?          // termo de busca em inglês; null = nunca buscar (ROM restrita, só ilustração)
+
   logs WorkoutExerciseLog[]
+  mediaCache ExerciseMediaCache?
 
   @@index([order])
+}
+
+// ---------------------------------------------------------------------------
+// CACHE DE MÍDIA EXTERNA (wger.de) — evita bater na API a cada carregamento
+// ---------------------------------------------------------------------------
+model ExerciseMediaCache {
+  id         String   @id @default(cuid())
+  exerciseId String   @unique
+  exercise   Exercise @relation(fields: [exerciseId], references: [id])
+  found      Boolean  // false = já buscamos e não achamos match bom; não tenta de novo até expirar
+  imageUrl   String?
+  sourceName String?  // "wger.de"
+  license    String?  // ex: "CC BY-SA 3.0"
+  author     String?  // license_author retornado pela API
+  fetchedAt  DateTime @default(now())
 }
 
 // ---------------------------------------------------------------------------

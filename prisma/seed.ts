@@ -2,15 +2,33 @@ import { PrismaClient, ExerciseCategory, FoodListType } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
+/**
+ * SISTEMA DE FASES CLÍNICAS
+ * ---------------------------------------------------------------
+ * Fase 1 (semanas 1-2)  — controle de dor/derrame: só isometria e baixo volume.
+ * Fase 2 (semanas 3-6)  — fortalecimento em cadeia fechada controlada.
+ * Fase 3 (semana 7+)    — trabalho unilateral / funcional, ainda dentro
+ *                          dos MESMOS limites de amplitude do laudo.
+ *
+ * IMPORTANTE: isso evolui volume (séries/reps/tempo) e QUAIS exercícios
+ * entram — nunca a amplitude máxima de flexão, que só um profissional
+ * pode liberar.
+ *
+ * ÂNCORAS: isometria de quadríceps e prancha aparecem em toda sessão,
+ * independente da fase ou do grupo A/B, por serem a base da proteção
+ * patelar e do core. O resto alterna entre sessão A (foco patelofemoral)
+ * e sessão B (cadeia posterior/quadril), pra não repetir sempre a mesma
+ * sessão inteira.
+ */
+
+const user_email = "anderson@k2tech.dev";
+
 async function main() {
   console.log("Seeding: usuário demo...");
   const user = await prisma.user.upsert({
-    where: { email: "anderson@k2tech.dev" },
+    where: { email: user_email },
     update: {},
-    create: {
-      name: "Anderson",
-      email: "anderson@k2tech.dev",
-    },
+    create: { name: "Anderson", email: user_email },
   });
 
   console.log("Seeding: perfil clínico...");
@@ -42,8 +60,9 @@ async function main() {
     },
   });
 
-  console.log("Seeding: exercícios...");
-  const exercises: Array<{
+  console.log("Seeding: exercícios (com progressão por fase)...");
+
+  type ExInput = {
     slug: string;
     order: number;
     name: string;
@@ -57,7 +76,14 @@ async function main() {
     holdSeconds: number | null;
     execution: string[];
     careNote: string;
-  }> = [
+    anchor: boolean;
+    templateGroup: "A" | "B" | null;
+    phaseMin: number;
+    progression: Record<string, { sets: number; reps: string; hold: number | null }>;
+    wgerSearchTerm: string | null;
+  };
+
+  const exercises: ExInput[] = [
     {
       slug: "isometria-quadriceps",
       order: 1,
@@ -78,6 +104,15 @@ async function main() {
       ],
       careNote:
         "Não flexione o joelho durante o exercício. Ponto de partida do protocolo: ativa o músculo protetor da patela sem gerar atrito articular.",
+      anchor: true,
+      templateGroup: null,
+      phaseMin: 1,
+      progression: {
+        "1": { sets: 2, reps: "8-10 rep.", hold: 8 },
+        "2": { sets: 3, reps: "10-15 rep.", hold: 12 },
+        "3": { sets: 3, reps: "15 rep.", hold: 15 },
+      },
+      wgerSearchTerm: null, // ROM crítica — só ilustração customizada
     },
     {
       slug: "extensao-terminal",
@@ -95,10 +130,18 @@ async function main() {
         "Sentado, com a perna levemente flexionada (~30°), toalha enrolada ou rolo sob o joelho.",
         "Estenda o joelho até ficar reto, terminando com contração firme.",
         "Retorne lentamente até os 30° de flexão, sem ir além disso.",
-        "Pode usar caneleira leve conforme evolução, sempre orientado pelo fisioterapeuta.",
       ],
       careNote:
         "Restrinja o movimento estritamente ao arco de 0° a 30°. Essa faixa evita contato da cartilagem lesada nas áreas de erosão mais profunda.",
+      anchor: false,
+      templateGroup: "A",
+      phaseMin: 1,
+      progression: {
+        "1": { sets: 2, reps: "10 rep.", hold: null },
+        "2": { sets: 3, reps: "12-15 rep.", hold: null },
+        "3": { sets: 3, reps: "15 rep. + carga leve no tornozelo", hold: null },
+      },
+      wgerSearchTerm: null,
     },
     {
       slug: "leg-press-parcial",
@@ -120,110 +163,18 @@ async function main() {
       ],
       careNote:
         "Nunca ultrapasse 45-60° de flexão. Não deixe o joelho ultrapassar a linha da ponta do pé. Evite travar o joelho com impacto no topo.",
-    },
-    {
-      slug: "ponte-gluteo",
-      order: 4,
-      name: "Ponte de Glúteo",
-      category: "CADEIA_POSTERIOR",
-      imageUrl: "/exercises/ponte_gluteo.png",
-      sets: "3 séries",
-      reps: "12-15 repetições",
-      targetMuscles: "Glúteo máximo e isquiotibiais",
-      maxFlexionDeg: null,
-      isIsometric: false,
-      holdSeconds: null,
-      execution: [
-        "Deite-se de costas, joelhos flexionados, pés apoiados no chão na largura do quadril.",
-        "Eleve o quadril contraindo o glúteo, formando linha reta dos ombros aos joelhos.",
-        "Segure 1-2 segundos no topo e desça controladamente.",
-        "Evite arquear excessivamente a lombar.",
-      ],
-      careNote:
-        "Exercício de baixíssimo impacto no joelho — ideal para fortalecer a cadeia posterior sem estressar a articulação patelofemoral.",
-    },
-    {
-      slug: "elevacao-pelvica-unilateral",
-      order: 5,
-      name: "Elevação Pélvica Unilateral",
-      category: "CADEIA_POSTERIOR",
-      imageUrl: "/exercises/elevacao_pelvica_unilateral.png",
-      sets: "2-3 séries",
-      reps: "10-12 repetições por lado",
-      targetMuscles: "Glúteo máximo, isquiotibiais e estabilizadores de quadril",
-      maxFlexionDeg: null,
-      isIsometric: false,
-      holdSeconds: null,
-      execution: [
-        "A partir da ponte, estenda uma perna totalmente, alinhada com o tronco.",
-        "Eleve e desça o quadril apoiando-se apenas na perna de base.",
-        "Realize todas as repetições de um lado antes de trocar.",
-      ],
-      careNote:
-        "Movimento controlado e sem pressa. A perna de apoio deve permanecer estável, sem compensações no joelho.",
-    },
-    {
-      slug: "cadeira-flexora",
-      order: 6,
-      name: "Cadeira Flexora (Leg Curl)",
-      category: "CADEIA_POSTERIOR",
-      imageUrl: "/exercises/cadeira_flexora.png",
-      sets: "3 séries",
-      reps: "12-15 repetições",
-      targetMuscles: "Isquiotibiais",
-      maxFlexionDeg: null,
-      isIsometric: false,
-      holdSeconds: null,
-      execution: [
-        "Ajuste o encosto conforme sua altura, apoio na altura dos tornozelos.",
-        "Flexione os joelhos trazendo o apoio em direção aos glúteos, de forma controlada.",
-        "Retorne lentamente até extensão quase completa, sem travar o joelho com impacto.",
-      ],
-      careNote:
-        "Use carga moderada. Fortalece a cadeia posterior, equilibrando forças ao redor do joelho e protegendo a patela.",
-    },
-    {
-      slug: "abducao-quadril",
-      order: 7,
-      name: "Abdução de Quadril",
-      category: "QUADRIL",
-      imageUrl: "/exercises/abducao_quadril.png",
-      sets: "3 séries",
-      reps: "15 repetições por lado",
-      targetMuscles: "Glúteo médio e glúteo mínimo",
-      maxFlexionDeg: null,
-      isIsometric: false,
-      holdSeconds: null,
-      execution: [
-        "Em pé, deitado de lado, ou no aparelho de abdução.",
-        "Afaste a perna lateralmente contra resistência leve a moderada, tronco estável.",
-        "Retorne controladamente à posição inicial.",
-      ],
-      careNote:
-        "O glúteo médio é essencial para o alinhamento do fêmur e da patela — fortalecê-lo reduz a pressão lateral sobre a cartilagem.",
-    },
-    {
-      slug: "extensao-quadril-cabo",
-      order: 8,
-      name: "Extensão de Quadril no Cabo/Polia",
-      category: "QUADRIL",
-      imageUrl: "/exercises/extensao_quadril_cabo.png",
-      sets: "3 séries",
-      reps: "12-15 repetições por lado",
-      targetMuscles: "Glúteo máximo e isquiotibiais",
-      maxFlexionDeg: null,
-      isIsometric: false,
-      holdSeconds: null,
-      execution: [
-        "Prenda caneleira de cabo no tornozelo, de frente para o aparelho.",
-        "Com joelho levemente flexionado (quase estendido), leve a perna para trás contraindo o glúteo.",
-        "Retorne controladamente sem deixar o quadril compensar em excesso.",
-      ],
-      careNote: "Foco do movimento no quadril e no glúteo, não em flexionar o joelho. Mantenha o tronco estável.",
+      anchor: false,
+      templateGroup: "A",
+      phaseMin: 2,
+      progression: {
+        "2": { sets: 2, reps: "12 rep., carga leve", hold: null },
+        "3": { sets: 3, reps: "12-15 rep., carga progressiva", hold: null },
+      },
+      wgerSearchTerm: null, // existe versão genérica, mas mostra amplitude completa — perigoso
     },
     {
       slug: "wall-sit-parcial",
-      order: 9,
+      order: 4,
       name: "Wall Sit Parcial (agachamento na parede)",
       category: "ISOMETRIA",
       imageUrl: "/exercises/wall_sit_parcial.png",
@@ -234,16 +185,24 @@ async function main() {
       isIsometric: true,
       holdSeconds: 20,
       execution: [
-        "Encoste as costas na parede e deslize para baixo até no máximo 45-60° de flexão de joelho.",
-        "Pés afastados o suficiente da parede para o joelho não ultrapassar a ponta do pé.",
-        "Sustente pelo tempo indicado, respirando normalmente, e suba controladamente.",
+        "Encoste as costas na parede e deslize para baixo até uma flexão de joelho de no máximo 45-60°.",
+        "Mantenha os pés afastados da parede o suficiente para que o joelho não ultrapasse a ponta do pé.",
+        "Sustente a posição pelo tempo indicado, respirando normalmente, e suba controladamente.",
       ],
       careNote:
-        "Nunca desça abaixo de 60° de flexão. Interrompa imediatamente se sentir dor anterior no joelho ou pressão na patela.",
+        "Nunca desça abaixo de 60° de flexão. Interrompa imediatamente se sentir dor anterior no joelho ou sensação de peso/pressão na patela.",
+      anchor: false,
+      templateGroup: "A",
+      phaseMin: 2,
+      progression: {
+        "2": { sets: 2, reps: "3-4 sustentações", hold: 15 },
+        "3": { sets: 3, reps: "4-5 sustentações", hold: 25 },
+      },
+      wgerSearchTerm: null, // wall sit genérico existe, mas em amplitude completa
     },
     {
       slug: "panturrilha",
-      order: 10,
+      order: 5,
       name: "Elevação de Panturrilha",
       category: "PANTURRILHA",
       imageUrl: "/exercises/panturrilha.png",
@@ -260,6 +219,152 @@ async function main() {
       ],
       careNote:
         "Baixo impacto — fortalece a base de sustentação da perna, contribuindo indiretamente para a estabilidade do joelho.",
+      anchor: false,
+      templateGroup: "A",
+      phaseMin: 1,
+      progression: {
+        "1": { sets: 2, reps: "12 rep.", hold: null },
+        "2": { sets: 3, reps: "15 rep.", hold: null },
+        "3": { sets: 3, reps: "15-20 rep., unilateral", hold: null },
+      },
+      wgerSearchTerm: "calf raise",
+    },
+    {
+      slug: "ponte-gluteo",
+      order: 6,
+      name: "Ponte de Glúteo",
+      category: "CADEIA_POSTERIOR",
+      imageUrl: "/exercises/ponte_gluteo.png",
+      sets: "3 séries",
+      reps: "12-15 repetições",
+      targetMuscles: "Glúteo máximo e isquiotibiais",
+      maxFlexionDeg: null,
+      isIsometric: false,
+      holdSeconds: null,
+      execution: [
+        "Deite-se de costas com os joelhos flexionados e os pés apoiados no chão, na largura do quadril.",
+        "Eleve o quadril contraindo o glúteo, formando uma linha reta dos ombros aos joelhos.",
+        "Segure 1-2 segundos no topo e desça controladamente.",
+      ],
+      careNote:
+        "Exercício de baixíssimo impacto no joelho — ideal para fortalecer a cadeia posterior sem estressar a articulação patelofemoral.",
+      anchor: false,
+      templateGroup: "B",
+      phaseMin: 1,
+      progression: {
+        "1": { sets: 2, reps: "10 rep.", hold: null },
+        "2": { sets: 3, reps: "12-15 rep.", hold: null },
+        "3": { sets: 3, reps: "15 rep. + pausa de 2s no topo", hold: null },
+      },
+      wgerSearchTerm: "glute bridge",
+    },
+    {
+      slug: "elevacao-pelvica-unilateral",
+      order: 7,
+      name: "Elevação Pélvica Unilateral",
+      category: "CADEIA_POSTERIOR",
+      imageUrl: "/exercises/elevacao_pelvica_unilateral.png",
+      sets: "2-3 séries",
+      reps: "10-12 por lado",
+      targetMuscles: "Glúteo máximo, isquiotibiais e estabilizadores de quadril",
+      maxFlexionDeg: null,
+      isIsometric: false,
+      holdSeconds: null,
+      execution: [
+        "A partir da ponte, estenda uma perna totalmente, mantendo-a alinhada com o tronco.",
+        "Eleve e desça o quadril apoiando-se apenas na perna de base.",
+        "Realize todas as repetições de um lado antes de trocar.",
+      ],
+      careNote:
+        "Movimento controlado — exige mais equilíbrio e controle unilateral, por isso só entra na Fase 3.",
+      anchor: false,
+      templateGroup: "B",
+      phaseMin: 3,
+      progression: {
+        "3": { sets: 3, reps: "10-12 por lado", hold: null },
+      },
+      wgerSearchTerm: "single leg glute bridge",
+    },
+    {
+      slug: "cadeira-flexora",
+      order: 8,
+      name: "Cadeira Flexora (Leg Curl)",
+      category: "CADEIA_POSTERIOR",
+      imageUrl: "/exercises/cadeira_flexora.png",
+      sets: "3 séries",
+      reps: "12-15 repetições",
+      targetMuscles: "Isquiotibiais",
+      maxFlexionDeg: null,
+      isIsometric: false,
+      holdSeconds: null,
+      execution: [
+        "Ajuste o encosto, apoio na altura dos tornozelos.",
+        "Flexione os joelhos trazendo o apoio em direção aos glúteos, de forma controlada.",
+        "Retorne lentamente até a extensão quase completa, sem travar o joelho com impacto.",
+      ],
+      careNote: "Carga moderada. Equilibra as forças ao redor do joelho, protegendo a patela.",
+      anchor: false,
+      templateGroup: "B",
+      phaseMin: 2,
+      progression: {
+        "2": { sets: 2, reps: "12 rep., carga leve", hold: null },
+        "3": { sets: 3, reps: "12-15 rep.", hold: null },
+      },
+      wgerSearchTerm: "leg curl",
+    },
+    {
+      slug: "abducao-quadril",
+      order: 9,
+      name: "Abdução de Quadril",
+      category: "QUADRIL",
+      imageUrl: "/exercises/abducao_quadril.png",
+      sets: "3 séries",
+      reps: "15 por lado",
+      targetMuscles: "Glúteo médio e mínimo",
+      maxFlexionDeg: null,
+      isIsometric: false,
+      holdSeconds: null,
+      execution: [
+        "Em pé, deitado de lado, ou usando o aparelho de abdução na academia.",
+        "Afaste a perna lateralmente contra resistência leve a moderada, tronco estável.",
+        "Retorne controladamente à posição inicial.",
+      ],
+      careNote:
+        "O glúteo médio alinha fêmur e patela — fortalecê-lo reduz a pressão lateral sobre a cartilagem.",
+      anchor: false,
+      templateGroup: "B",
+      phaseMin: 2,
+      progression: {
+        "2": { sets: 2, reps: "12 por lado", hold: null },
+        "3": { sets: 3, reps: "15 por lado", hold: null },
+      },
+      wgerSearchTerm: "hip abduction",
+    },
+    {
+      slug: "extensao-quadril-cabo",
+      order: 10,
+      name: "Extensão de Quadril no Cabo/Polia",
+      category: "QUADRIL",
+      imageUrl: "/exercises/extensao_quadril_cabo.png",
+      sets: "3 séries",
+      reps: "12-15 por lado",
+      targetMuscles: "Glúteo máximo e isquiotibiais",
+      maxFlexionDeg: null,
+      isIsometric: false,
+      holdSeconds: null,
+      execution: [
+        "Prenda uma caneleira de cabo no tornozelo, de frente para o aparelho.",
+        "Com o joelho quase estendido, leve a perna para trás contraindo o glúteo.",
+        "Retorne sem deixar o quadril compensar em excesso.",
+      ],
+      careNote: "Foco do movimento no quadril e no glúteo, não em flexionar o joelho.",
+      anchor: false,
+      templateGroup: "B",
+      phaseMin: 3,
+      progression: {
+        "3": { sets: 3, reps: "12-15 por lado", hold: null },
+      },
+      wgerSearchTerm: "cable hip extension",
     },
     {
       slug: "prancha",
@@ -274,46 +379,46 @@ async function main() {
       isIsometric: true,
       holdSeconds: 30,
       execution: [
-        "Apoie antebraços e pontas dos pés no chão, corpo alinhado dos ombros aos calcanhares.",
+        "Apoie os antebraços e as pontas dos pés no chão, corpo alinhado dos ombros aos calcanhares.",
         "Contraia abdômen e glúteos, evitando que o quadril suba ou afunde.",
         "Mantenha respiração controlada durante toda a sustentação.",
       ],
-      careNote:
-        "Core forte melhora a estabilidade de todo o membro inferior, reduzindo compensações que sobrecarregam o joelho.",
+      careNote: "Core forte reduz compensações que sobrecarregam o joelho.",
+      anchor: true,
+      templateGroup: null,
+      phaseMin: 1,
+      progression: {
+        "1": { sets: 2, reps: "3 sustentações", hold: 15 },
+        "2": { sets: 3, reps: "3-4 sustentações", hold: 25 },
+        "3": { sets: 3, reps: "4 sustentações", hold: 40 },
+      },
+      wgerSearchTerm: "plank",
     },
   ];
 
   for (const ex of exercises) {
+    const { progression, ...rest } = ex;
     await prisma.exercise.upsert({
       where: { slug: ex.slug },
-      update: ex,
-      create: ex,
+      update: { ...rest, progression: progression as any },
+      create: { ...rest, progression: progression as any },
     });
   }
 
   console.log("Seeding: alimentos...");
-  const foods: Array<{
-    listType: FoodListType;
-    nutrient: string;
-    sources: string;
-    note: string;
-    order: number;
-  }> = [
-    // Anti-inflamatórios
+  const foods: Array<{ listType: FoodListType; nutrient: string; sources: string; note: string; order: number }> = [
     { listType: "ANTI_INFLAMATORIO", order: 1, nutrient: "Ômega-3 (EPA/DHA)", sources: "Salmão, sardinha, atum, arenque, chia, linhaça moída, nozes", note: "3-4x por semana (peixes) + 1 colher de sopa/dia de linhaça ou chia moída" },
     { listType: "ANTI_INFLAMATORIO", order: 2, nutrient: "Curcumina + piperina", sources: "Cúrcuma em pó + pimenta-do-reino (sempre juntas) + gordura boa (azeite)", note: "1 colher de chá/dia; reforça diretamente o ativo do Along-C" },
     { listType: "ANTI_INFLAMATORIO", order: 3, nutrient: "Gengibre", sources: "Chá de gengibre fresco, ralado em sucos e pratos", note: "1-2x ao dia" },
     { listType: "ANTI_INFLAMATORIO", order: 4, nutrient: "Catequinas (chá verde)", sources: "Chá verde, matcha", note: "2-3 xícaras/dia, longe de suplementos de ferro" },
     { listType: "ANTI_INFLAMATORIO", order: 5, nutrient: "Azeite de oliva extravirgem cru", sources: "Uso a frio em saladas e pratos prontos (não fritar)", note: "2-3 colheres de sopa/dia" },
     { listType: "ANTI_INFLAMATORIO", order: 6, nutrient: "Antioxidantes (polifenóis)", sources: "Mirtilo, amora, morango, uva roxa, romã, beterraba, couve-roxa", note: "1-2 porções/dia" },
-    // Sinergia com Along-C
     { listType: "SINERGIA_ALONG_C", order: 1, nutrient: "Vitamina C", sources: "Acerola, kiwi, laranja, limão, goiaba, pimentão cru", note: "Cofator obrigatório da síntese de colágeno" },
     { listType: "SINERGIA_ALONG_C", order: 2, nutrient: "Enxofre orgânico (MSM natural)", sources: "Alho, cebola, ovo, brócolis, couve-flor, couve", note: "Matéria-prima para glicosaminoglicanos da cartilagem e líquido sinovial" },
     { listType: "SINERGIA_ALONG_C", order: 3, nutrient: "Colágeno e glicosamina naturais", sources: "Caldo de ossos (bone broth), gelatina sem açúcar", note: "Reforça a suplementação de colágeno tipo II já em uso" },
     { listType: "SINERGIA_ALONG_C", order: 4, nutrient: "Manganês", sources: "Castanhas (moderação), abacaxi, grãos integrais, aveia", note: "Cofator enzimático direto do manganês presente no Along-C" },
     { listType: "SINERGIA_ALONG_C", order: 5, nutrient: "Silício e boro", sources: "Aveia, banana, cevada, grão-de-bico", note: "Apoiam mineralização e integridade do tecido conjuntivo" },
     { listType: "SINERGIA_ALONG_C", order: 6, nutrient: "Água e eletrólitos", sources: "Água, água de coco, frutas ricas em água", note: "Hidratação adequada mantém a viscosidade do líquido sinovial" },
-    // Evitar
     { listType: "EVITAR", order: 1, nutrient: "Frituras e gordura trans", sources: "Salgadinhos industrializados, fast-food, margarina, padaria industrial", note: "Potente gatilho pró-inflamatório" },
     { listType: "EVITAR", order: 2, nutrient: "Açúcar refinado e farinha branca", sources: "Refrigerantes, doces, pão branco, massas refinadas", note: "Picos de glicose aumentam a inflamação" },
     { listType: "EVITAR", order: 3, nutrient: "Excesso de óleos ricos em ômega-6", sources: "Óleo de soja, milho e girassol em grande quantidade", note: "Sem equilíbrio com ômega-3, favorece inflamação" },
@@ -321,7 +426,6 @@ async function main() {
     { listType: "EVITAR", order: 5, nutrient: "Excesso de sódio e embutidos", sources: "Salsicha, presunto, salgados prontos, temperos industrializados", note: "Favorece retenção de líquido e pode piorar o derrame articular" },
     { listType: "EVITAR", order: 6, nutrient: "Ultraprocessados em geral", sources: "Aditivos e conservantes diversos", note: "Associados a maior atividade inflamatória sistêmica" },
   ];
-
   for (const f of foods) {
     await prisma.foodItem.create({ data: f });
   }
@@ -331,11 +435,10 @@ async function main() {
     { name: "Peixaria / Proteínas", isAvoidList: false, order: 1, items: ["Salmão fresco ou congelado", "Sardinha (fresca ou em lata, em água/azeite)", "Atum fresco ou em lata (sem óleo de soja)", "Ovos caipiras", "Frango (peito, sem pele)", "Carne vermelha magra (1-2x/semana)"] },
     { name: "Hortifruti — vegetais", isAvoidList: false, order: 2, items: ["Brócolis", "Couve-flor", "Couve manteiga", "Espinafre", "Alho e cebola", "Pimentão vermelho/amarelo (cru)", "Beterraba", "Gengibre fresco", "Cúrcuma fresca ou em pó"] },
     { name: "Hortifruti — frutas", isAvoidList: false, order: 3, items: ["Mirtilo (blueberry)", "Amora", "Morango", "Uva roxa", "Romã", "Kiwi", "Laranja", "Acerola (in natura ou polpa)", "Abacaxi", "Banana"] },
-    { name: "Grãos, sementes e cereais", isAvoidList: false, order: 4, items: ["Chia", "Linhaça (em grão, moer na hora)", "Aveia em flocos", "Castanha-do-pará", "Nozes", "Amêndoas", "Grão-de-bico", "Cevada"] },
+    { name: "Grãos, sementes e cereais", isAvoidList: false, order: 4, items: ["Chia", "Linhaça (comprar em grão e moer na hora)", "Aveia em flocos", "Castanha-do-pará", "Nozes", "Amêndoas", "Grão-de-bico", "Cevada"] },
     { name: "Óleos, temperos e outros", isAvoidList: false, order: 5, items: ["Azeite de oliva extravirgem (uso a frio)", "Pimenta-do-reino moída", "Chá verde ou matcha", "Água de coco", "Ossos para caldo (bone broth)", "Gelatina incolor sem açúcar (opcional)"] },
     { name: "Evitar no carrinho", isAvoidList: true, order: 6, items: ["Refrigerantes e sucos industrializados", "Salgadinhos e frituras industrializadas", "Margarina e gorduras trans", "Embutidos (salsicha, presunto, mortadela)", "Pão branco e massas refinadas em excesso", "Molhos prontos com excesso de sódio/açúcar"] },
   ];
-
   for (const cat of marketCategories) {
     const created = await prisma.shoppingCategory.create({
       data: { name: cat.name, isAvoidList: cat.isAvoidList, order: cat.order },
