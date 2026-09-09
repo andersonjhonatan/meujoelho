@@ -1,0 +1,144 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// USUÁRIO
+// ---------------------------------------------------------------------------
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  birthYear Int?
+  createdAt DateTime @default(now())
+
+  clinicalProfile ClinicalProfile?
+  workoutLogs     WorkoutLog[]
+  shoppingItems   ShoppingItem[]
+}
+
+// ---------------------------------------------------------------------------
+// PERFIL CLÍNICO (dados do laudo e tratamento — vindos do guia original)
+// ---------------------------------------------------------------------------
+model ClinicalProfile {
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  user              User     @relation(fields: [userId], references: [id])
+  diagnosis         String   @default("Condropatia patelofemoral grave — joelho esquerdo")
+  mriFindings       String[] // achados do laudo de ressonância
+  currentMedication String[] // Along-C, Mytro, Proflam...
+  contraindications String[] // agachamento profundo, saltos, etc.
+  updatedAt         DateTime @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// EXERCÍCIOS
+// ---------------------------------------------------------------------------
+enum ExerciseCategory {
+  ISOMETRIA
+  CADEIA_FECHADA
+  CADEIA_POSTERIOR
+  QUADRIL
+  CORE
+  PANTURRILHA
+}
+
+model Exercise {
+  id             String           @id @default(cuid())
+  slug           String           @unique
+  order          Int
+  name           String
+  category       ExerciseCategory
+  imageUrl       String
+  sets           String
+  reps           String
+  targetMuscles  String
+  maxFlexionDeg  Int?             // amplitude máxima segura (null = sem restrição de flexão)
+  isIsometric    Boolean          @default(false)
+  holdSeconds    Int?             // duração da sustentação, se isométrico
+  execution      String[]         // passo a passo
+  careNote       String           @db.Text
+
+  logs WorkoutExerciseLog[]
+
+  @@index([order])
+}
+
+// ---------------------------------------------------------------------------
+// SESSÕES DE TREINO / HISTÓRICO
+// ---------------------------------------------------------------------------
+model WorkoutLog {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  date       DateTime @default(now())
+  painLevel  Int      @default(0) // escala EVA 0-10
+  swelling   Boolean  @default(false)
+  notes      String?  @db.Text
+
+  exercises WorkoutExerciseLog[]
+
+  @@index([userId, date])
+}
+
+model WorkoutExerciseLog {
+  id            String     @id @default(cuid())
+  workoutLogId  String
+  workoutLog    WorkoutLog @relation(fields: [workoutLogId], references: [id], onDelete: Cascade)
+  exerciseId    String
+  exercise      Exercise   @relation(fields: [exerciseId], references: [id])
+  setsCompleted Int?
+  repsCompleted String?
+  loadKg        Float?     // carga usada, quando aplicável (leg press, cadeira flexora...)
+  painDuring    Int?       // dor específica durante o exercício (0-10)
+
+  @@unique([workoutLogId, exerciseId])
+}
+
+// ---------------------------------------------------------------------------
+// NUTRIÇÃO — alimentos estratégicos
+// ---------------------------------------------------------------------------
+enum FoodListType {
+  ANTI_INFLAMATORIO
+  SINERGIA_ALONG_C
+  EVITAR
+}
+
+model FoodItem {
+  id       String       @id @default(cuid())
+  listType FoodListType
+  nutrient String       // ex: "Ômega-3 (EPA/DHA)"
+  sources  String       @db.Text
+  note     String       @db.Text // frequência sugerida OU motivo de evitar
+  order    Int          @default(0)
+}
+
+// ---------------------------------------------------------------------------
+// LISTA DE MERCADO (interativa, com checkbox persistido por usuário)
+// ---------------------------------------------------------------------------
+model ShoppingCategory {
+  id          String   @id @default(cuid())
+  name        String
+  isAvoidList Boolean  @default(false)
+  order       Int      @default(0)
+
+  items ShoppingItem[]
+}
+
+model ShoppingItem {
+  id         String           @id @default(cuid())
+  categoryId String
+  category   ShoppingCategory @relation(fields: [categoryId], references: [id])
+  name       String
+  order      Int              @default(0)
+
+  // checkbox é por usuário (cada um marca o que já comprou)
+  userId  String?
+  user    User?    @relation(fields: [userId], references: [id])
+  checked Boolean  @default(false)
+}

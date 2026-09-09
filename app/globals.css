@@ -1,0 +1,18 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body {
+  overscroll-behavior-y: contain;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  background-color: #eef3f7;
+  color: #2c3e50;
+  padding-bottom: 76px; /* espaço para a barra de navegação inferior fixa */
+}
+
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
