@@ -7,7 +7,7 @@ export default function NotFound() {
         🔎
       </p>
       <h1 className="text-lg font-bold text-navy dark:text-white">Página não encontrada</h1>
-      <Link href="/" className="inline-block text-sm font-semibold text-brand">
+      <Link href="/hoje" className="inline-block text-sm font-semibold text-brand">
         ← Voltar para o início
       </Link>
     </div>

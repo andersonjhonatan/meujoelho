@@ -23,6 +23,12 @@ export function dayKey(date: Date = new Date()): string {
   }).format(date);
 }
 
+/** Dia da semana no fuso do app: 0 = domingo, 1 = segunda ... 6 = sábado. */
+export function weekday(date: Date = new Date()): number {
+  const nome = new Intl.DateTimeFormat("en-US", { timeZone: APP_TIMEZONE, weekday: "short" }).format(date);
+  return ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(nome);
+}
+
 /** Diferença em dias inteiros entre dois dayKeys ("2026-09-09" → 0). */
 export function daysBetweenKeys(from: string, to: string): number {
   const a = Date.parse(`${from}T00:00:00Z`);

@@ -1,4 +1,4 @@
-import Image from "next/image";
+import ExerciseThumb from "@/components/ExerciseThumb";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
@@ -26,8 +26,6 @@ export default async function ExerciseDetailPage({ params }: PageProps) {
   const ex = await getExerciseBySlug(slug, user?.id);
   if (!ex) notFound();
 
-  const imgSrc = ex.media?.imageUrl ?? ex.imageUrl;
-
   return (
     <div className="space-y-4 pb-6">
       <Link href="/treino" className="text-sm font-semibold text-brand">
@@ -35,8 +33,15 @@ export default async function ExerciseDetailPage({ params }: PageProps) {
       </Link>
 
       <article className="overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
-        <div className="relative h-56 w-full bg-soft">
-          <Image src={imgSrc} alt={`Ilustração do exercício ${ex.name}`} fill className="object-contain p-4" sizes="400px" priority />
+        <div className="relative h-56 w-full bg-soft dark:bg-slate-700">
+          <ExerciseThumb
+            imageUrl={ex.imageUrl}
+            mediaUrl={ex.media?.imageUrl}
+            name={ex.name}
+            category={ex.category}
+            variant="detail"
+            priority
+          />
         </div>
 
         {/* Atribuição da licença: fonte, licença REAL vinda da API e autor, com
@@ -49,9 +54,13 @@ export default async function ExerciseDetailPage({ params }: PageProps) {
             </a>{" "}
             · {ex.media.license} · {ex.media.author}
           </p>
-        ) : (
+        ) : ex.imageUrl ? (
           <p className="bg-soft py-1.5 text-center text-[10px] text-slate-500 dark:bg-slate-700 dark:text-slate-300">
             Ilustração customizada — amplitude segura desenhada para o seu caso
+          </p>
+        ) : (
+          <p className="bg-soft py-1.5 text-center text-[10px] text-slate-500 dark:bg-slate-700 dark:text-slate-300">
+            Sem foto: nenhuma imagem disponível representa este movimento com fidelidade. Siga a execução escrita.
           </p>
         )}
 
@@ -97,17 +106,36 @@ export default async function ExerciseDetailPage({ params }: PageProps) {
         </ol>
       </section>
 
+      <section className="rounded-xl border border-slate-100 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+        <h2 className="mb-1 text-sm font-bold text-navy dark:text-white">Por que este exercício</h2>
+        <p className="text-sm leading-snug text-slate-600 dark:text-slate-300">{ex.rationale}</p>
+        {ex.equipment.length > 0 && (
+          <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+            <span className="font-semibold">Precisa de:</span> {ex.equipment.join(", ")}
+          </p>
+        )}
+      </section>
+
+      {ex.needsClearance && ex.clearanceNote && (
+        <section className="rounded-xl border-2 border-danger/40 bg-danger/10 p-4">
+          <h2 className="mb-1 text-xs font-bold uppercase text-danger">Aguardando liberação do fisioterapeuta</h2>
+          <p className="text-sm leading-relaxed text-navy dark:text-slate-100">{ex.clearanceNote}</p>
+        </section>
+      )}
+
       <section className="rounded-xl bg-care p-4">
         <h2 className="mb-1 text-xs font-bold uppercase text-white">Atenção — cuidado com o joelho</h2>
         <p className="text-sm leading-snug text-white">{ex.careNote}</p>
       </section>
 
-      <ExerciseLogForm
-        exerciseId={ex.id}
-        target={ex.currentTarget}
-        usesLoad={LOAD_CATEGORIES.has(ex.category)}
-        lastEntry={ex.lastEntry}
-      />
+      {!ex.needsClearance && (
+        <ExerciseLogForm
+          exerciseId={ex.id}
+          target={ex.currentTarget}
+          usesLoad={LOAD_CATEGORIES.has(ex.category)}
+          lastEntry={ex.lastEntry}
+        />
+      )}
     </div>
   );
 }

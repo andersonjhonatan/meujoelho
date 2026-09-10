@@ -112,6 +112,7 @@ export async function saveSession(input: SaveSessionInput): Promise<ActionResult
     });
 
     revalidatePath("/");
+    revalidatePath("/hoje");
     revalidatePath("/treino");
     revalidatePath("/historico");
     return { ok: true };

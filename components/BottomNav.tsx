@@ -13,7 +13,7 @@ import { usePathname } from "next/navigation";
  */
 const items: Array<{ href: string; label: string; paths: string[] }> = [
   {
-    href: "/",
+    href: "/hoje",
     label: "Hoje",
     paths: ["M3 10.5 12 3l9 7.5", "M5.5 9.5V20a1 1 0 0 0 1 1h11a1 1 0 0 0 1-1V9.5"],
   },
@@ -50,6 +50,10 @@ const items: Array<{ href: string; label: string; paths: string[] }> = [
 export default function BottomNav() {
   const pathname = usePathname();
 
+  // A capa de entrada não tem barra de navegação: ali o único caminho é
+  // "Entrar", e uma barra fixa no rodapé competiria com esse botão.
+  if (pathname === "/") return null;
+
   return (
     <nav
       aria-label="Navegação principal"
@@ -59,7 +63,7 @@ export default function BottomNav() {
         {items.map((item) => {
           // Antes só marcava com igualdade exata: dentro de /treino/prancha ou
           // /nutricao/lista-mercado a barra não indicava seção nenhuma.
-          const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
+          const active = pathname.startsWith(item.href);
           return (
             <li key={item.href} className="flex-1">
               <Link

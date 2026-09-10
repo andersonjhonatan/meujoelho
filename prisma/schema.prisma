@@ -20,6 +20,7 @@ model User {
   clinicalProfile ClinicalProfile?
   workoutLogs     WorkoutLog[]
   shoppingItems   ShoppingItem[]
+  medications     Medication[]
 }
 
 // ---------------------------------------------------------------------------
@@ -31,9 +32,29 @@ model ClinicalProfile {
   user              User     @relation(fields: [userId], references: [id])
   diagnosis         String   @default("Condropatia patelofemoral grave — joelho esquerdo")
   mriFindings       String[] // achados do laudo de ressonância
-  currentMedication String[] // Along-C, Mytro, Proflam...
   contraindications String[] // agachamento profundo, saltos, etc.
+  /// Perguntas que o laudo levanta e que só o fisioterapeuta pode responder.
+  /// Ficam visíveis no app para irem junto na próxima consulta.
+  openQuestions     String[]
   updatedAt         DateTime @updatedAt
+}
+
+/// Medicação/suplementação em uso. Era um array de texto solto no perfil, o que
+/// não deixava espaço para a informação que mais importa: para que serve, como
+/// tomar e qual o limite de uso de cada um.
+model Medication {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  name        String
+  activeName  String   // princípio ativo / composição
+  kind        String   // "Medicamento" | "Suplemento" | "Uso tópico"
+  purpose     String   @db.Text
+  dosage      String
+  cautionNote String?  @db.Text
+  order       Int      @default(0)
+
+  @@unique([userId, name])
 }
 
 // ---------------------------------------------------------------------------
@@ -46,6 +67,27 @@ enum ExerciseCategory {
   QUADRIL
   CORE
   PANTURRILHA
+  MOBILIDADE
+  CONTROLE_MOTOR
+}
+
+/// Bloco dentro da sessão — uma sessão de reabilitação tem estrutura
+/// (mobiliza, ativa, treina, estabiliza, solta), não é uma lista solta.
+enum SessionBlock {
+  MOBILIDADE
+  ATIVACAO
+  PRINCIPAL
+  CORE
+  FINALIZACAO
+}
+
+/// Compressão patelofemoral estimada do exercício. É o filtro de segurança que
+/// importa neste caso: a lesão está confinada à articulação patelofemoral
+/// (patela + tróclea), com menisco, cruzados e colaterais íntegros.
+enum PfjLoad {
+  BAIXA
+  MODERADA
+  ALTA
 }
 
 model Exercise {
@@ -54,7 +96,10 @@ model Exercise {
   order          Int
   name           String
   category       ExerciseCategory
-  imageUrl       String           // ilustração customizada (fallback sempre seguro)
+  // Nulo é um estado legítimo: nem todo exercício tem ilustração própria, e
+  // inventar uma imagem genérica ensina o movimento errado. A tela desenha um
+  // símbolo da categoria quando não há foto confiável.
+  imageUrl       String?
   sets           String
   reps           String
   targetMuscles  String
@@ -66,8 +111,17 @@ model Exercise {
 
   // --- Sistema de progressão / variedade clínica ---
   anchor         Boolean          @default(false) // true = presente em toda sessão (proteção patelar/core)
-  templateGroup  String?          // "A" | "B" — sessão em que aparece quando não é âncora
+  templateGroup  String?          // "A" (segunda) | "B" (quarta) | "C" (sexta)
+  block          SessionBlock     @default(PRINCIPAL)
+  pfjLoad        PfjLoad          @default(BAIXA)
+  equipment      String[]         // vazio = peso do corpo
+  rationale      String           @db.Text // por que este exercício está aqui, no caso dele
   phaseMin       Int              @default(1)     // fase (1/2/3) em que o exercício é liberado
+  /// true = exercício que NÃO entra no plano automático porque depende de
+  /// liberação explícita do fisioterapeuta. Fica visível numa seção separada,
+  /// com o motivo, em vez de sumir do app.
+  needsClearance Boolean          @default(false)
+  clearanceNote  String?          @db.Text
   progression    Json             // { "1": {sets, reps, hold}, "2": {...}, "3": {...} }
 
   // --- Mídia externa (wger) ---

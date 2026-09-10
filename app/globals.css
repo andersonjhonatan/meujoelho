@@ -17,6 +17,12 @@ body {
   padding-bottom: calc(76px + env(safe-area-inset-bottom));
 }
 
+/* A capa de entrada não tem barra de navegação, então não precisa do respiro
+   inferior — sem isto sobra uma faixa vazia embaixo do botão "Entrar". */
+body:has(> main > .capa) {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
 @media (prefers-color-scheme: dark) {
   body {
     background-color: #0f172a;

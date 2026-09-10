@@ -1,100 +1,92 @@
 import Link from "next/link";
-import EmptyDatabase from "@/components/EmptyDatabase";
-import { getAppUser, getCurrentPhase, getDashboardSummary, getStreak, getTodaysTemplate } from "@/lib/data";
-import { formatDate } from "@/lib/date";
+import type { Metadata } from "next";
+import { getAppUser, getCurrentPhase, getStreak } from "@/lib/data";
+import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
-
-const PHASE_FOCUS: Record<number, string> = {
-  1: "Controlar dor e derrame antes de qualquer ganho de força.",
-  2: "Fortalecer em cadeia fechada, dentro dos limites de amplitude do laudo.",
-  3: "Trabalho unilateral e funcional — controle e equilíbrio.",
+export const metadata: Metadata = {
+  title: "Joelho Recovery",
+  description: "Protocolo de reabilitação para condropatia patelofemoral",
 };
 
-export default async function DashboardPage() {
+/**
+ * Capa de entrada.
+ *
+ * O app abre direto no painel do dia, o que é ótimo no uso diário mas não dá
+ * nenhum contexto de "o que é isto" — nem no primeiro acesso, nem quando é
+ * instalado como PWA e aberto pelo ícone. Esta tela ocupa esse lugar: diz o que
+ * o app é, mostra em uma linha onde o tratamento está, e entra.
+ *
+ * É a única rota sem a barra de navegação inferior (ver components/BottomNav).
+ */
+export default async function CapaPage() {
   const user = await getAppUser();
-  if (!user) return <EmptyDatabase />;
 
-  const [summary, streak, phaseInfo, template] = await Promise.all([
-    getDashboardSummary(user.id),
-    getStreak(user.id),
-    getCurrentPhase(user.id),
-    getTodaysTemplate(user.id),
-  ]);
-
-  const doneToday = Boolean(summary.todaySession);
+  const [phaseInfo, streak, exercisesCount] = user
+    ? await Promise.all([getCurrentPhase(user.id), getStreak(user.id), prisma.exercise.count({ where: { needsClearance: false } })])
+    : [null, 0, 0];
 
   return (
-    <div className="space-y-5 pb-4">
-      <header>
-        <p className="text-sm text-slate-500 dark:text-slate-400">Olá, {user.name} 👋</p>
-        <h1 className="text-2xl font-bold text-navy dark:text-white">Como está o joelho hoje?</h1>
-      </header>
+    <div className="capa flex min-h-[calc(100vh-3rem)] flex-col">
+      <div className="flex flex-1 flex-col items-center justify-center text-center">
+        {/* Escudo + pulso: proteção da cartilagem e acompanhamento diário — as
+            duas coisas que o app faz. Tentativas de desenhar o joelho em si
+            ficaram ilegíveis no tamanho de ícone. */}
+        <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-3xl bg-navy shadow-lg">
+          <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M12 3 4.5 6v6c0 4.4 3.1 7.9 7.5 9 4.4-1.1 7.5-4.6 7.5-9V6L12 3Z" />
+            <path d="M8 12.5h2l1.4-2.6 1.6 4 1.2-1.9h1.8" />
+          </svg>
+        </div>
 
-      <section className="rounded-xl bg-navy p-4">
-        <p className="mb-1 text-[11px] font-semibold uppercase text-white/60">{phaseInfo.label}</p>
-        <p className="text-sm text-white">
-          Sessão de hoje: <span className="font-bold">{template}</span> · semana {phaseInfo.weeksSinceStart + 1} no
-          protocolo · {phaseInfo.sessionsCount} sessões
+        <h1 className="text-3xl font-bold leading-tight text-navy dark:text-white">Joelho Recovery</h1>
+        <p className="mt-2 max-w-xs text-sm text-slate-600 dark:text-slate-300">
+          Seu protocolo de reabilitação para condropatia patelofemoral — treino por fase clínica, nutrição e
+          histórico, no bolso.
         </p>
-        <p className="mt-1.5 text-xs text-white/70">{PHASE_FOCUS[phaseInfo.phase]}</p>
-        {phaseInfo.holdReason && (
-          <p className="mt-2 rounded-lg bg-white/10 p-2 text-xs text-white/90">
-            <span className="font-semibold">Progressão segurada:</span> {phaseInfo.holdReason}
-          </p>
-        )}
-      </section>
 
-      <div className="grid grid-cols-2 gap-3">
-        <div className="rounded-xl border border-slate-100 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
-          <p className="text-3xl font-bold text-brand">{streak}</p>
-          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-            {streak === 1 ? "dia seguido de treino" : "dias seguidos de treino"}
-          </p>
+        {user && (
+          <div className="mt-8 grid w-full max-w-xs grid-cols-3 gap-2">
+            <Stat valor={String(exercisesCount)} rotulo="exercícios" />
+            <Stat valor={`${phaseInfo!.phase}/3`} rotulo="fase atual" />
+            <Stat valor={String(streak)} rotulo={streak === 1 ? "dia seguido" : "dias seguidos"} />
+          </div>
+        )}
+
+        <div className="mt-5 flex flex-wrap items-center justify-center gap-1.5">
+          <Selo>Segunda · Quarta · Sexta</Selo>
+          <Selo>3 sessões diferentes</Selo>
         </div>
-        <div className="rounded-xl border border-slate-100 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
-          <p className="text-3xl font-bold text-navy dark:text-white">{summary.exercisesCount}</p>
-          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">exercícios no protocolo</p>
-        </div>
+
+        <Link
+          href="/hoje"
+          className="mt-8 block w-full rounded-2xl bg-brand py-4 text-center text-lg font-bold text-white shadow-lg shadow-brand/25 transition-transform active:scale-[0.98]"
+        >
+          Entrar
+        </Link>
       </div>
 
-      {summary.lastWorkout && (
-        <div className="rounded-xl border border-slate-100 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
-          <p className="mb-1 text-xs font-semibold uppercase text-slate-400">Última sessão</p>
-          <p className="text-sm text-navy dark:text-slate-100">
-            {formatDate(summary.lastWorkout.date)} · Dor relatada:{" "}
-            <span className="font-bold">{summary.lastWorkout.painLevel}/10</span>
-            {summary.lastWorkout.swelling && <span className="font-semibold text-danger"> · com derrame</span>}
-          </p>
-        </div>
-      )}
-
-      <section className="rounded-xl border border-danger/30 bg-danger/10 p-4">
-        <h2 className="mb-2 text-xs font-bold uppercase text-danger">Sempre evite</h2>
-        <ul className="space-y-1">
-          {summary.contraindications.map((c: string) => (
-            <li key={c} className="flex gap-1.5 text-sm text-navy dark:text-slate-100">
-              <span className="text-danger" aria-hidden="true">
-                ✗
-              </span>{" "}
-              {c}
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      <Link
-        href="/treino"
-        className="block rounded-xl bg-brand py-3.5 text-center font-bold text-white transition-transform active:scale-[0.98]"
-      >
-        {doneToday ? "Rever o treino de hoje →" : "Começar treino de hoje →"}
-      </Link>
-
-      {doneToday && (
-        <p className="text-center text-xs font-semibold text-okgreen">
-          ✓ Sessão de hoje já registrada — dor {summary.todaySession!.painLevel}/10
-        </p>
-      )}
+      <p className="px-4 pb-6 pt-4 text-center text-[11px] leading-relaxed text-slate-400">
+        Material educativo de apoio. A progressão deve ser validada pelo seu fisioterapeuta — o app registra o que
+        você faz, não substitui a avaliação de quem examina o joelho.
+      </p>
     </div>
+  );
+}
+
+function Stat({ valor, rotulo }: { valor: string; rotulo: string }) {
+  return (
+    <div className="rounded-xl border border-slate-100 bg-white px-2 py-3 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+      <p className="text-xl font-bold text-navy dark:text-white">{valor}</p>
+      <p className="mt-0.5 text-[10px] leading-tight text-slate-500 dark:text-slate-400">{rotulo}</p>
+    </div>
+  );
+}
+
+function Selo({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="rounded-full bg-white px-3 py-1 text-[11px] font-semibold text-slate-500 shadow-sm dark:bg-slate-800 dark:text-slate-300">
+      {children}
+    </span>
   );
 }

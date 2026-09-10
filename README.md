@@ -27,12 +27,53 @@ Scripts úteis:
 | `npm run db:migrate` | cria/aplica migration em desenvolvimento |
 | `npm run db:seed` | popula o banco — **idempotente**, pode rodar quantas vezes quiser |
 | `npm run db:studio` | abre o Prisma Studio para inspecionar os dados |
+| `npm run test` | testes das funções puras (fuso horário, validação) |
 
 ## O que tem de robusto aqui
 
-### 1. Sistema de fases (evolui de verdade, com segurança)
+### 1. O protocolo foi desenhado a partir do laudo, não de um modelo genérico
 
-Em vez de repetir os mesmos 11 exercícios pra sempre, o protocolo evolui em 3 fases:
+A RM de 25/08/2026 diz duas coisas que mudam tudo no desenho:
+
+**A lesão está confinada à articulação patelofemoral** (patela + tróclea). Meniscos, cruzados e
+colaterais estão íntegros, e as demais superfícies condrais são regulares. Ou seja: quadril, cadeia
+posterior, panturrilha e core podem ser treinados com carga de verdade sem tocar na área lesionada —
+e é justamente aí que a evidência é mais forte (fortalecer quadril + joelho supera joelho isolado na
+dor patelofemoral).
+
+**As erosões estão nos terços médio e inferior do vértice da patela e no terço superior da tróclea.**
+Essas duas superfícies se encontram entre ~10° e ~30° de flexão, faixa em que a área de contato
+patelofemoral é a menor de toda a amplitude (~168 mm² a 20° contra ~334 mm² a 60°): mesma força,
+tensão bem maior. Por isso a extensão terminal de arco curto — exercício clássico de quadríceps e que
+estava no protocolo original — **saiu do plano automático** e virou item aguardando liberação do
+fisioterapeuta, com o motivo escrito na tela.
+
+Somam-se dois achados que também entram no desenho: o **derrame moderado** inibe o quadríceps por via
+reflexa (enquanto não ceder, ganho de força é limitado por neurologia, não por esforço), e a **leve
+tendinopatia distal do quadríceps** responde a isometria evoluindo para carga lenta e pesada.
+
+### 2. Semana de 3 sessões diferentes — segunda, quarta e sexta
+
+São **28 exercícios** no protocolo, distribuídos em três sessões com foco próprio:
+
+| Dia | Sessão | Foco | Por quê |
+|---|---|---|---|
+| Segunda | A | Quadríceps e controle patelar | Cadeia fechada em amplitude controlada, a faixa de menor compressão |
+| Quarta | B | Quadril e cadeia posterior | Carga alta possível com risco patelofemoral praticamente nulo |
+| Sexta | C | Controle motor, integração e panturrilha | Treina o gesto que sobrecarrega o joelho na vida real |
+
+Cada sessão é montada em blocos — **mobilidade → ativação → trabalho principal → core → finalização** —
+e duas âncoras (isometria de quadríceps e prancha) aparecem em todas.
+
+Terça, quinta e fim de semana são dias de recuperação: o app avisa e mostra a próxima sessão, sem
+bloquear quem quiser adiantar.
+
+Cada exercício traz o **porquê clínico** dele no seu caso, o equipamento necessário e um selo quando
+gera compressão na patela.
+
+### 3. Sistema de fases (evolui de verdade, com segurança)
+
+O protocolo evolui em 3 fases:
 
 | Fase | Quando | O que muda |
 |---|---|---|
@@ -54,14 +95,23 @@ A tela sempre diz *por que* a fase não avançou, em vez de simplesmente não av
 fisioterapeuta pode liberar — o sistema evolui volume e complexidade, não o limite de segurança do
 laudo.
 
-### 2. Sessões A/B (variedade sem inventar exercício novo)
+Se o dia já tem sessão registrada, a tela mostra o template **daquela** sessão — o plano não muda
+debaixo do usuário depois que ele salvou o treino.
 
-- **Âncoras** (isometria de quadríceps + prancha) aparecem em toda sessão.
-- O resto alterna entre **Sessão A** (foco patelofemoral) e **Sessão B** (cadeia posterior/quadril).
-- A alternância é automática (par = A, ímpar = B). Se o dia já tem sessão registrada, a tela mostra o
-  template **daquela** sessão — o plano não muda debaixo do usuário depois que ele salvou o treino.
+### 4. O que o app se recusa a decidir
 
-### 3. Registro por exercício
+Duas coisas ficam explicitamente fora do alcance do app, visíveis em vez de escondidas:
+
+- **Exercícios aguardando liberação** aparecem numa seção separada no fim do treino, com o motivo
+  clínico completo — não entram no plano automático nem somem do app.
+- **Perguntas para o fisioterapeuta**, no Perfil: os pontos que o laudo levanta e que só quem examina
+  o joelho pode responder. A tela existe para ser aberta na consulta.
+
+O Perfil também lista a **medicação em uso** com o que importa de cada uma — incluindo que o
+cetorolaco (Mytro) é, por bula, um anti-inflamatório de uso curto (até 5 dias) e não indicado para
+dor crônica, e que anti-inflamatório mascara justamente a dor que segura a progressão de carga.
+
+### 5. Registro por exercício
 
 Cada exercício registra séries, repetições, **carga em kg** e **dor específica durante o exercício**.
 É o que responde a pergunta que o histórico existe para responder: *qual* exercício está incomodando o
@@ -72,7 +122,7 @@ tem sinal) e vai para o banco de uma vez, ao finalizar a sessão.
 no mesmo dia atualiza a sessão em vez de criar outra. Duas sessões no mesmo dia inflariam a contagem
 que calcula fase, streak e alternância A/B.
 
-### 4. Integração com wger.de (fotos reais, licenciadas)
+### 6. Integração com wger.de (fotos reais, licenciadas)
 
 - Resolução por **id numérico estável** (`wgerExerciseId`), com o nome exato em inglês como fallback.
 - A licença exibida é a **real, retornada pela API** (a maior parte do acervo é CC-BY-SA 4.0), com
@@ -84,14 +134,16 @@ que calcula fase, streak e alternância A/B.
 
 | Exercício | wger | Motivo |
 |---|---|---|
-| Prancha, Ponte de glúteo, Panturrilha, Abdução de quadril | ✅ | movimento genérico, sem restrição de amplitude |
+| Prancha, Ponte de glúteo, Panturrilha, Abdução de quadril, Stiff, Alongamento de isquiotibiais e de panturrilha | ✅ | movimento genérico, imagem conferida e fiel |
 | Isometria, Extensão terminal, Leg press parcial, Wall sit parcial | ❌ | amplitude restrita — foto genérica mostraria ROM completa |
 | Cadeira flexora | ❌ | a imagem cadastrada na wger ilustra uma **cadeira extensora**, que está nas contraindicações do laudo |
-| Elevação pélvica unilateral | ❌ | o exercício existe na wger, mas sem nenhuma imagem |
-| Extensão de quadril no cabo | ❌ | só existem variações em outra posição/equipamento |
+| Step-up | ❌ | a imagem mostra degrau na altura do joelho; o protocolo pede 10-15 cm |
+| Alongamento de flexor de quadril | ❌ | a imagem é a versão ajoelhada, que apoia a patela lesionada no chão |
+| Elevação pélvica unilateral, Extensão de quadril no cabo | ❌ | sem imagem, ou só variações em outra posição/equipamento |
 
 Cada imagem foi conferida visualmente antes de entrar — num app clínico, imagem errada é informação
-clínica errada.
+clínica errada. Dos 28 exercícios, 7 têm imagem confiável; os outros mostram um símbolo da categoria,
+em vez de uma foto genérica que ensinaria o movimento errado.
 
 ## Stack
 
@@ -110,9 +162,13 @@ validado antes de tocar no banco.
 ```
 joelho-vercel/
 ├── prisma/
-│   ├── schema.prisma          # Exercise (+ fases/progressão/wger), WorkoutLog, cache de mídia...
+│   ├── schema.prisma          # Exercise (+ fases/blocos/wger), WorkoutLog, Medication, cache...
 │   ├── migrations/            # versionadas — o build da Vercel roda `migrate deploy`
-│   └── seed.ts                # todo o conteúdo clínico (idempotente)
+│   ├── seed.ts                # orquestra a escrita (idempotente)
+│   └── data/                  # o conteúdo clínico, separado da mecânica
+│       ├── exercises.ts       # 28 exercícios, sessões A/B/C, justificativa de cada um
+│       ├── clinical.ts        # laudo, contraindicações, perguntas ao fisio, medicação
+│       └── nutrition.ts       # alimentos e lista de mercado
 ├── lib/
 │   ├── data.ts                # fase clínica, plano do dia, streak, séries do histórico
 │   ├── wger.ts                # cliente wger com cache + fallback seguro
@@ -121,7 +177,8 @@ joelho-vercel/
 │   └── validation.ts          # validação de entrada das Server Actions
 ├── app/
 │   ├── actions.ts             # saveSession, toggleShoppingItem, resetShoppingList
-│   ├── page.tsx               # dashboard
+│   ├── page.tsx               # capa de entrada (sem barra de navegação)
+│   ├── hoje/                  # painel do dia
 │   ├── treino/                # plano do dia, detalhe do exercício, finalizar
 │   ├── nutricao/, historico/, perfil/, offline/
 │   ├── error.tsx / not-found.tsx / loading.tsx

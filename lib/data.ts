@@ -1,7 +1,8 @@
 import "server-only";
 import { prisma } from "./prisma";
 import { getExerciseMedia, type ExerciseMedia } from "./wger";
-import { dayKey, daysBetweenKeys } from "./date";
+import { dayKey, daysBetweenKeys, weekday } from "./date";
+import type { SessionBlock } from "@prisma/client";
 
 export type ProgressionTarget = { sets: number; reps: string; hold: number | null };
 
@@ -110,22 +111,86 @@ export async function getCurrentPhase(userId: string): Promise<PhaseInfo> {
   };
 }
 
+export type SessionTemplate = "A" | "B" | "C";
+
 /**
- * Sessão A ou B: alterna com base no número de sessões já registradas, para que
- * treinos consecutivos não repitam o mesmo conjunto. Se o dia de hoje já tem
- * sessão registrada, devolve o template DELA — a tela não pode passar a mostrar
- * outra sessão depois que o usuário salvou o treino do dia.
- * As duas âncoras (isometria de quadríceps e prancha) aparecem sempre.
+ * CALENDÁRIO DA SEMANA — segunda, quarta e sexta.
+ *
+ * A versão anterior alternava A/B contando sessões registradas, o que fazia o
+ * treino do dia depender de quando você tinha treinado pela última vez em vez
+ * de depender do dia da semana. Agora cada sessão tem um dia fixo:
+ *
+ *   Segunda (A) — quadríceps e controle patelar
+ *   Quarta  (B) — quadril e cadeia posterior
+ *   Sexta   (C) — controle motor, integração e panturrilha
+ *
+ * Terça, quinta e fim de semana são dias de recuperação. O app não bloqueia
+ * treinar neles: mostra a próxima sessão e avisa que hoje é folga.
  */
-export async function getTodaysTemplate(userId: string): Promise<"A" | "B"> {
-  const today = await prisma.workoutLog.findUnique({
-    where: { userId_dayKey: { userId, dayKey: dayKey() } },
+const SESSION_BY_WEEKDAY: Record<number, SessionTemplate> = { 1: "A", 3: "B", 5: "C" };
+
+export const SESSION_LABELS: Record<SessionTemplate, { dia: string; foco: string }> = {
+  A: { dia: "Segunda-feira", foco: "Quadríceps e controle patelar" },
+  B: { dia: "Quarta-feira", foco: "Quadril e cadeia posterior" },
+  C: { dia: "Sexta-feira", foco: "Controle motor, integração e panturrilha" },
+};
+
+const WEEKDAY_NAMES = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
+
+export type TodaySession = {
+  template: SessionTemplate;
+  isTrainingDay: boolean;
+  todayName: string;
+  /** Quando hoje é dia de recuperação, o dia da próxima sessão programada. */
+  nextTrainingDayName: string | null;
+};
+
+/**
+ * Qual sessão é a de hoje. Se o dia já tem treino registrado, vale o template
+ * DELE — a tela não pode trocar de sessão depois que o usuário salvou o treino.
+ */
+export async function getTodaysSession(userId: string, now: Date = new Date()): Promise<TodaySession> {
+  const registered = await prisma.workoutLog.findUnique({
+    where: { userId_dayKey: { userId, dayKey: dayKey(now) } },
     select: { template: true },
   });
-  if (today?.template === "A" || today?.template === "B") return today.template;
 
-  const count = await prisma.workoutLog.count({ where: { userId } });
-  return count % 2 === 0 ? "A" : "B";
+  const today = weekday(now);
+  const scheduled = SESSION_BY_WEEKDAY[today];
+  const isTrainingDay = Boolean(scheduled);
+
+  // Próximo dia programado, andando no círculo da semana.
+  let nextTrainingDayName: string | null = null;
+  if (!isTrainingDay) {
+    for (let i = 1; i <= 7; i++) {
+      const dia = (today + i) % 7;
+      if (SESSION_BY_WEEKDAY[dia]) {
+        nextTrainingDayName = WEEKDAY_NAMES[dia];
+        break;
+      }
+    }
+  }
+
+  const saved = registered?.template;
+  const template: SessionTemplate =
+    saved === "A" || saved === "B" || saved === "C"
+      ? saved
+      : (scheduled ?? nextScheduledTemplate(today));
+
+  return { template, isTrainingDay, todayName: WEEKDAY_NAMES[today], nextTrainingDayName };
+}
+
+function nextScheduledTemplate(today: number): SessionTemplate {
+  for (let i = 1; i <= 7; i++) {
+    const t = SESSION_BY_WEEKDAY[(today + i) % 7];
+    if (t) return t;
+  }
+  return "A";
+}
+
+/** Compatibilidade: só o identificador da sessão do dia. */
+export async function getTodaysTemplate(userId: string): Promise<SessionTemplate> {
+  return (await getTodaysSession(userId)).template;
 }
 
 /** Lê a meta da fase de forma segura — JSON inválido/incompleto não derruba a tela. */
@@ -139,44 +204,73 @@ function targetForPhase(progression: unknown, phase: number): ProgressionTarget 
   };
 }
 
-export type PlannedExercise = Awaited<ReturnType<typeof getTodaysPlan>>["exercises"][number];
+export type PlannedExercise = Awaited<ReturnType<typeof getTodaysPlan>>["blocks"][number]["exercises"][number];
+
+/** Ordem em que os blocos aparecem na sessão — é a estrutura de um treino real. */
+const BLOCK_ORDER: SessionBlock[] = ["MOBILIDADE", "ATIVACAO", "PRINCIPAL", "CORE", "FINALIZACAO"];
+
+export const BLOCK_LABELS: Record<SessionBlock, { titulo: string; descricao: string }> = {
+  MOBILIDADE: { titulo: "Mobilidade", descricao: "Prepara o tecido antes de carregar" },
+  ATIVACAO: { titulo: "Ativação", descricao: "Acorda o músculo certo antes do trabalho pesado" },
+  PRINCIPAL: { titulo: "Trabalho principal", descricao: "O treino de força do dia" },
+  CORE: { titulo: "Core", descricao: "Estabilidade que protege o joelho na vida real" },
+  FINALIZACAO: { titulo: "Finalização", descricao: "Solta o que foi trabalhado" },
+};
 
 /**
- * Monta o plano de hoje: filtra pela fase atual, pelo grupo A/B (+ âncoras),
- * aplica a progressão (séries/reps/tempo) da fase e busca mídia real da wger
- * para os exercícios elegíveis — com fallback sempre para a ilustração própria.
+ * Monta o plano de hoje: filtra pela fase atual e pela sessão do dia, organiza
+ * em blocos, aplica a progressão da fase e busca mídia licenciada quando existe.
+ *
+ * Exercícios com `needsClearance` NUNCA entram no plano — voltam à parte, para
+ * serem levados ao fisioterapeuta.
  */
 export async function getTodaysPlan(userId: string) {
-  const [phaseInfo, template, allExercises, todaySession] = await Promise.all([
+  const [phaseInfo, session, allExercises, todaySession] = await Promise.all([
     getCurrentPhase(userId),
-    getTodaysTemplate(userId),
+    getTodaysSession(userId),
     prisma.exercise.findMany({ orderBy: { order: "asc" } }),
     getTodaySession(userId),
   ]);
 
   const eligible = allExercises.filter(
-    (ex) => ex.phaseMin <= phaseInfo.phase && (ex.anchor || ex.templateGroup === template)
+    (ex) =>
+      !ex.needsClearance &&
+      ex.phaseMin <= phaseInfo.phase &&
+      (ex.anchor || ex.templateGroup === session.template)
   );
 
-  const exercises = await Promise.all(
-    eligible.map(async (ex) => {
-      const media = await getExerciseMedia(ex.id, ex.wgerExerciseId, ex.wgerSearchTerm);
-      return {
-        ...ex,
-        media, // null = usa imageUrl (ilustração customizada)
-        currentTarget: targetForPhase(ex.progression, phaseInfo.phase),
-      };
-    })
+  const withMedia = await Promise.all(
+    eligible.map(async (ex) => ({
+      ...ex,
+      media: await getExerciseMedia(ex.id, ex.wgerExerciseId, ex.wgerSearchTerm),
+      currentTarget: targetForPhase(ex.progression, phaseInfo.phase),
+    }))
   );
+
+  const blocks = BLOCK_ORDER.map((block) => ({
+    block,
+    ...BLOCK_LABELS[block],
+    exercises: withMedia.filter((ex) => ex.block === block),
+  })).filter((b) => b.exercises.length > 0);
 
   return {
     ...phaseInfo,
     phaseLabel: phaseInfo.label,
-    template,
-    exercises,
-    /** Sessão de hoje já registrada (ou null) — a tela usa para não oferecer salvar de novo. */
+    ...session,
+    sessionLabel: SESSION_LABELS[session.template],
+    blocks,
+    exercises: withMedia,
     todaySession,
   };
+}
+
+/** Exercícios retidos aguardando liberação do fisioterapeuta, com o motivo. */
+export async function getClearanceExercises() {
+  return prisma.exercise.findMany({
+    where: { needsClearance: true },
+    orderBy: { order: "asc" },
+    select: { id: true, slug: true, name: true, clearanceNote: true, maxFlexionDeg: true },
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -313,6 +407,10 @@ export async function getProgressSeries(userId: string, take = 21) {
 
 export async function getClinicalProfile(userId: string) {
   return prisma.clinicalProfile.findUnique({ where: { userId } });
+}
+
+export async function getMedications(userId: string) {
+  return prisma.medication.findMany({ where: { userId }, orderBy: { order: "asc" } });
 }
 
 export async function getDashboardSummary(userId: string) {
