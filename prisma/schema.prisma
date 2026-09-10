@@ -4,7 +4,20 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+
+  // url: conexão POOLED — usada pelo app em runtime. Cada função serverless
+  // abre conexões curtas e em grande número; sem o pooler o Postgres estoura o
+  // limite de conexões.
+  url = env("DATABASE_URL")
+
+  // directUrl: conexão DIRETA (sem pooler) — usada só pelo Prisma CLI em
+  // `migrate deploy`, que roda no build. Migration através do PgBouncer falha:
+  // ela precisa de advisory locks e de sessão estável, que o pooler em modo
+  // transação não oferece.
+  //
+  // Os dois nomes são exatamente os que a integração Postgres da Vercel (Neon)
+  // injeta sozinha no projeto — não há nada para configurar à mão no deploy.
+  directUrl = env("DATABASE_URL_UNPOOLED")
 }
 
 // ---------------------------------------------------------------------------

@@ -187,20 +187,63 @@ joelho-vercel/
 
 ## Deploy na Vercel
 
-1. **Suba o código**: `git push -u origin main`
-2. **Crie o banco**: dashboard → **Storage** → **Create Database** → **Postgres**
-3. **Importe o projeto**: **Add New → Project** → conecte o banco → **Deploy**
-   O build roda `prisma generate && prisma migrate deploy && next build`, então as tabelas são criadas
-   automaticamente a partir de `prisma/migrations/`.
-4. **Popule o banco** (uma vez):
-   ```bash
-   echo 'DATABASE_URL="cole-a-connection-string-da-vercel"' > .env
-   npm install && npm run db:seed
-   ```
-5. Abra a URL e instale como PWA ("Adicionar à tela inicial").
+### 1. Suba o código
+```bash
+git push origin main
+```
 
-> Use a connection string **pooled** (com `-pooler` no host) em `DATABASE_URL`: funções serverless
-> abrem muitas conexões curtas e estouram o limite do Postgres sem o pooler.
+### 2. Crie o banco
+No dashboard da Vercel → **Storage** → **Create Database** → **Postgres (Neon)** → conecte ao projeto.
+
+A integração injeta sozinha as duas variáveis que o projeto usa — **não há nada para configurar à mão**:
+
+| Variável | O que é | Quem usa |
+|---|---|---|
+| `DATABASE_URL` | conexão *pooled* | o app em runtime |
+| `DATABASE_URL_UNPOOLED` | conexão *direta* | `prisma migrate deploy`, no build |
+
+As duas são necessárias e cumprem papéis diferentes. Serverless abre muitas conexões curtas e sem o
+pooler o Postgres estoura o limite; já migration **não funciona** através do pooler, porque precisa de
+advisory lock e sessão estável. Por isso o `schema.prisma` declara `url` e `directUrl` separados.
+
+> Se a sua integração expuser os nomes antigos (`POSTGRES_PRISMA_URL` e `POSTGRES_URL_NON_POOLING`),
+> crie `DATABASE_URL` e `DATABASE_URL_UNPOOLED` manualmente apontando para esses mesmos valores.
+
+### 3. Importe o projeto
+**Add New → Project** → selecione o repositório → **Deploy**.
+
+O build roda `prisma generate && prisma migrate deploy && next build`, então as tabelas são criadas
+automaticamente a partir de `prisma/migrations/`. Não é preciso mexer em Build Command.
+
+### 4. Popule o banco — uma vez só
+O seed **não** roda no build (o build não deve escrever conteúdo). Rode uma vez, da sua máquina,
+apontando para o banco de produção sem alterar o seu `.env`:
+
+```bash
+DATABASE_URL="<cole a DATABASE_URL da Vercel>" \
+DATABASE_URL_UNPOOLED="<cole a DATABASE_URL_UNPOOLED da Vercel>" \
+npm run db:seed
+```
+
+Variável passada na linha de comando tem precedência sobre o `.env`, então o seu ambiente local
+continua intacto. O seed é idempotente: se rodar de novo, atualiza o conteúdo sem duplicar nada e sem
+desmarcar a lista de mercado.
+
+### 5. Abra e instale
+Acesse a URL, toque no menu do navegador e escolha **"Adicionar à tela inicial"** para instalar como
+PWA. A capa de entrada é a primeira tela.
+
+### Opcional
+
+- `NEXT_PUBLIC_SITE_URL` com a URL final do app deixa os metadados de compartilhamento absolutos.
+- **Deploys de preview usam o mesmo banco de produção** e, portanto, aplicam migrations nele. Num app
+  pessoal isso costuma ser o desejado; se algum dia incomodar, crie um banco separado para o ambiente
+  Preview nas variáveis do projeto.
+
+### Atualizando depois
+
+`git push` — a Vercel reconstrói e aplica migrations pendentes sozinha. Só rode o seed de novo quando
+o **conteúdo clínico** mudar (exercícios, nutrição, medicação), o que não acontece a cada deploy.
 
 ## Importante
 
