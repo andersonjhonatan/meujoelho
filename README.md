@@ -193,6 +193,13 @@ git push origin main
 ```
 
 ### 2. Crie o banco e **conecte ao projeto**
+
+> **Escolha do banco:** prefira um Postgres com conexão TCP normal — **Neon**, na aba Storage, é o
+> caminho que este projeto documenta e testa. Evite **Prisma Postgres**: ele pode entregar a
+> `DATABASE_URL` no formato `prisma+postgres://` (Prisma Accelerate), que fala HTTP em vez de
+> Postgres, exige `@prisma/extension-accelerate` no client e não aceita migration. Se isso acontecer,
+> o build para com uma mensagem explicando as saídas.
+
 No dashboard da Vercel → **Storage** → **Create Database** → **Postgres**. Em seguida, na aba
 **Projects** do banco, conecte-o a este projeto — é esse passo que cria as variáveis de ambiente.
 Bancos criados mas não conectados não expõem variável nenhuma, e o build falha por falta de

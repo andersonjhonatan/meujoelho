@@ -3,8 +3,13 @@ import { test } from "node:test";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
-const { derivarDoPooler, resolverUrlDireta, variaveisDeBancoPresentes, DIRECT_URL_VARS } =
-  require("../scripts/migrate-deploy.js");
+const {
+  derivarDoPooler,
+  resolverUrlDireta,
+  variaveisDeBancoPresentes,
+  validarProtocolo,
+  DIRECT_URL_VARS,
+} = require("../scripts/migrate-deploy.js");
 
 /**
  * Estes testes existem por causa de um deploy real que quebrou: o schema
@@ -81,4 +86,11 @@ test("diagnóstico lista nomes de variáveis de banco, nunca valores", () => {
   assert.ok(!nomes.includes("HOME_TESTE"), "só variáveis de banco entram na lista");
   // A connection string é segredo: o diagnóstico não pode vazá-la em log de build.
   assert.ok(!nomes.some((n: string) => n.includes("segredo") || n.includes("postgres://")));
+});
+
+test("aceita connection string Postgres normal", () => {
+  // validarProtocolo derruba o processo em URL inválida; passar sem lançar é o
+  // sinal de que a URL é aceitável.
+  assert.doesNotThrow(() => validarProtocolo("postgresql://u:p@host:5432/db"));
+  assert.doesNotThrow(() => validarProtocolo("postgres://u:p@db.prisma.io:5432/db?sslmode=require"));
 });

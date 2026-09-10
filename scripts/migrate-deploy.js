@@ -141,10 +141,38 @@ function abortarSemDatabaseUrl() {
   process.exit(1);
 }
 
+/**
+ * Aborta em connection string que o projeto não sabe usar.
+ *
+ * A integração "Prisma Postgres" da Vercel pode entregar uma URL no formato
+ * `prisma+postgres://accelerate.prisma-data.net/?api_key=...`, que fala com o
+ * Prisma Accelerate por HTTP em vez de Postgres por TCP. Ela só funciona com
+ * `@prisma/extension-accelerate` aplicado ao client, e migration não roda por
+ * ela de jeito nenhum. Falhar aqui, dizendo o que aconteceu, é muito melhor que
+ * um erro de protocolo no meio do build.
+ */
+function validarProtocolo(url) {
+  if (!url.startsWith("prisma+postgres://") && !url.startsWith("prisma://")) return;
+
+  console.error(
+    "[migrate] DATABASE_URL está no formato do Prisma Accelerate " +
+      `(${url.slice(0, url.indexOf("://") + 3)}...), que este projeto não usa.\n\n` +
+      "          Accelerate fala HTTP, não Postgres, e exige @prisma/extension-accelerate\n" +
+      "          no client — migration não roda por essa URL.\n\n" +
+      "          Duas saídas:\n" +
+      "          a) use um Postgres com conexão TCP normal (Neon, na aba Storage da\n" +
+      "             Vercel) — é o caminho que este projeto documenta; ou\n" +
+      "          b) no Prisma Console, copie a connection string DIRETA\n" +
+      "             (postgres://...@db.prisma.io:5432/...) e use-a em DATABASE_URL."
+  );
+  process.exit(1);
+}
+
 function main() {
   carregarEnvLocal();
 
   if (!process.env.DATABASE_URL) abortarSemDatabaseUrl();
+  validarProtocolo(process.env.DATABASE_URL);
 
   const { url, origem } = resolverUrlDireta();
   console.log(`[migrate] conexão direta: ${origem}`);
@@ -166,4 +194,10 @@ function main() {
 // Só executa quando chamado direto; importado, expõe a lógica para os testes.
 if (require.main === module) main();
 
-module.exports = { derivarDoPooler, resolverUrlDireta, variaveisDeBancoPresentes, DIRECT_URL_VARS };
+module.exports = {
+  derivarDoPooler,
+  resolverUrlDireta,
+  variaveisDeBancoPresentes,
+  validarProtocolo,
+  DIRECT_URL_VARS,
+};
