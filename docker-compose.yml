@@ -1,0 +1,31 @@
+# Banco de desenvolvimento local.
+#
+# O projeto usa Postgres (o schema depende de tipos que o SQLite não tem: array
+# de texto e JSON), então rodar localmente exige um Postgres de verdade. Este
+# compose é o caminho de uma linha para isso:
+#
+#   docker compose up -d
+#   npm run db:setup
+#
+# A porta 5434 evita conflito com outros Postgres já rodando na máquina.
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: joelho_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: joelho
+      POSTGRES_PASSWORD: joelho
+      POSTGRES_DB: joelho
+    ports:
+      - "5434:5432"
+    volumes:
+      - joelho_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U joelho"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  joelho_pgdata:

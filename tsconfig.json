@@ -6,6 +6,9 @@
     "skipLibCheck": true,
     "strict": true,
     "noEmit": true,
+    // Os testes rodam pelo runner nativo do Node (--experimental-strip-types),
+    // que exige a extensão .ts nos imports ESM. Só é válido com noEmit.
+    "allowImportingTsExtensions": true,
     "esModuleInterop": true,
     "module": "esnext",
     "moduleResolution": "bundler",

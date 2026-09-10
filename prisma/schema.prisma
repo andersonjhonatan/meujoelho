@@ -71,7 +71,14 @@ model Exercise {
   progression    Json             // { "1": {sets, reps, hold}, "2": {...}, "3": {...} }
 
   // --- Mídia externa (wger) ---
-  wgerSearchTerm String?          // termo de busca em inglês; null = nunca buscar (ROM restrita, só ilustração)
+  // wgerExerciseId: id numérico estável do exercício na wger (resolução em 1 request).
+  // wgerSearchTerm: nome EXATO em inglês na wger (o filtro ?name= é case-sensitive) —
+  //                 usado só como fallback caso o id saia do ar.
+  // Ambos null = nunca buscar mídia externa. Isso vale para:
+  //   a) exercícios com amplitude restrita (mostrariam ROM completa = erro clínico);
+  //   b) exercícios cuja única imagem disponível na wger ilustra outro movimento.
+  wgerExerciseId Int?
+  wgerSearchTerm String?
 
   logs WorkoutExerciseLog[]
   mediaCache ExerciseMediaCache?
@@ -89,9 +96,12 @@ model ExerciseMediaCache {
   found      Boolean  // false = já buscamos e não achamos match bom; não tenta de novo até expirar
   imageUrl   String?
   sourceName String?  // "wger.de"
-  license    String?  // ex: "CC BY-SA 3.0"
+  sourceUrl  String?  // página do exercício na wger (exigida pela atribuição da licença)
+  license    String?  // nome curto REAL vindo da API (CC-BY-SA 4, CC-BY-SA 3, CC0...)
   author     String?  // license_author retornado pela API
   fetchedAt  DateTime @default(now())
+
+  @@index([fetchedAt])
 }
 
 // ---------------------------------------------------------------------------
@@ -102,12 +112,19 @@ model WorkoutLog {
   userId     String
   user       User     @relation(fields: [userId], references: [id])
   date       DateTime @default(now())
+  // dayKey = "YYYY-MM-DD" no fuso do app (America/Sao_Paulo). Existe para garantir
+  // UMA sessão por dia: duas sessões no mesmo dia corromperiam o cálculo de fase,
+  // de streak e a alternância A/B (que conta sessões registradas).
+  dayKey     String
   painLevel  Int      @default(0) // escala EVA 0-10
   swelling   Boolean  @default(false)
   notes      String?  @db.Text
+  template   String?  // "A" | "B" — qual sessão foi executada
+  phase      Int?     // fase clínica no momento da sessão (histórico auditável)
 
   exercises WorkoutExerciseLog[]
 
+  @@unique([userId, dayKey])
   @@index([userId, date])
 }
 
@@ -141,6 +158,10 @@ model FoodItem {
   sources  String       @db.Text
   note     String       @db.Text // frequência sugerida OU motivo de evitar
   order    Int          @default(0)
+
+  // Chave natural: permite que o seed rode quantas vezes for preciso sem
+  // duplicar a lista (antes, cada `npm run db:seed` triplicava a nutrição).
+  @@unique([listType, nutrient])
 }
 
 // ---------------------------------------------------------------------------
@@ -148,7 +169,7 @@ model FoodItem {
 // ---------------------------------------------------------------------------
 model ShoppingCategory {
   id          String   @id @default(cuid())
-  name        String
+  name        String   @unique
   isAvoidList Boolean  @default(false)
   order       Int      @default(0)
 
@@ -166,4 +187,7 @@ model ShoppingItem {
   userId  String?
   user    User?    @relation(fields: [userId], references: [id])
   checked Boolean  @default(false)
+
+  // Chave natural para o seed ser idempotente PRESERVANDO o que já foi marcado.
+  @@unique([categoryId, name])
 }

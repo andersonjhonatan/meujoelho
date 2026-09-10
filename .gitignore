@@ -1,6 +1,21 @@
 node_modules/
 .next/
+out/
 .env
 .env.local
 *.log
 .DS_Store
+.vercel
+next-env.d.ts
+
+# Gerados pelo next-pwa no build — nunca versionar (ficam desatualizados e
+# passam a servir um service worker antigo em produção).
+public/sw.js
+public/sw.js.map
+public/workbox-*.js
+public/workbox-*.js.map
+public/fallback-*.js
+public/swe-worker-*.js
+
+# artefato incremental do TypeScript
+tsconfig.tsbuildinfo

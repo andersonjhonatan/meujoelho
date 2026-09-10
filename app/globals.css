@@ -2,17 +2,39 @@
 @tailwind components;
 @tailwind utilities;
 
-html, body {
+html,
+body {
   overscroll-behavior-y: contain;
   -webkit-tap-highlight-color: transparent;
 }
 
 body {
+  /* Tema claro é o padrão; o escuro segue a preferência do sistema, o que
+     importa num app que também é usado à noite, depois do treino. */
   background-color: #eef3f7;
   color: #2c3e50;
-  padding-bottom: 76px; /* espaço para a barra de navegação inferior fixa */
+  /* espaço para a barra de navegação inferior fixa + área segura do aparelho */
+  padding-bottom: calc(76px + env(safe-area-inset-bottom));
+}
+
+@media (prefers-color-scheme: dark) {
+  body {
+    background-color: #0f172a;
+    color: #e2e8f0;
+  }
 }
 
 .safe-bottom {
   padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Respeita quem pediu menos animação no sistema. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

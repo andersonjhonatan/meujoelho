@@ -1,17 +1,20 @@
 import Link from "next/link";
-import { getDemoUser, getDashboardSummary, getStreak, getCurrentPhase, getTodaysTemplate } from "@/lib/data";
+import EmptyDatabase from "@/components/EmptyDatabase";
+import { getAppUser, getCurrentPhase, getDashboardSummary, getStreak, getTodaysTemplate } from "@/lib/data";
+import { formatDate } from "@/lib/date";
 
 export const dynamic = "force-dynamic";
 
+const PHASE_FOCUS: Record<number, string> = {
+  1: "Controlar dor e derrame antes de qualquer ganho de força.",
+  2: "Fortalecer em cadeia fechada, dentro dos limites de amplitude do laudo.",
+  3: "Trabalho unilateral e funcional — controle e equilíbrio.",
+};
+
 export default async function DashboardPage() {
-  const user = await getDemoUser();
-  if (!user) {
-    return (
-      <div className="pt-10 text-center text-sm text-gray-500">
-        Banco de dados vazio. Rode <code className="bg-soft px-1 rounded">npx prisma db seed</code>.
-      </div>
-    );
-  }
+  const user = await getAppUser();
+  if (!user) return <EmptyDatabase />;
+
   const [summary, streak, phaseInfo, template] = await Promise.all([
     getDashboardSummary(user.id),
     getStreak(user.id),
@@ -19,59 +22,79 @@ export default async function DashboardPage() {
     getTodaysTemplate(user.id),
   ]);
 
+  const doneToday = Boolean(summary.todaySession);
+
   return (
     <div className="space-y-5 pb-4">
       <header>
-        <p className="text-sm text-gray-500">Olá, {user.name} 👋</p>
-        <h1 className="text-2xl font-bold text-navy">Como está o joelho hoje?</h1>
+        <p className="text-sm text-slate-500 dark:text-slate-400">Olá, {user.name} 👋</p>
+        <h1 className="text-2xl font-bold text-navy dark:text-white">Como está o joelho hoje?</h1>
       </header>
 
-      <div className="bg-navy rounded-xl p-4">
-        <p className="text-[11px] font-semibold text-white/60 uppercase mb-1">{phaseInfo.label}</p>
-        <p className="text-white text-sm">
+      <section className="rounded-xl bg-navy p-4">
+        <p className="mb-1 text-[11px] font-semibold uppercase text-white/60">{phaseInfo.label}</p>
+        <p className="text-sm text-white">
           Sessão de hoje: <span className="font-bold">{template}</span> · semana {phaseInfo.weeksSinceStart + 1} no
-          protocolo
+          protocolo · {phaseInfo.sessionsCount} sessões
         </p>
-      </div>
+        <p className="mt-1.5 text-xs text-white/70">{PHASE_FOCUS[phaseInfo.phase]}</p>
+        {phaseInfo.holdReason && (
+          <p className="mt-2 rounded-lg bg-white/10 p-2 text-xs text-white/90">
+            <span className="font-semibold">Progressão segurada:</span> {phaseInfo.holdReason}
+          </p>
+        )}
+      </section>
 
       <div className="grid grid-cols-2 gap-3">
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+        <div className="rounded-xl border border-slate-100 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
           <p className="text-3xl font-bold text-brand">{streak}</p>
-          <p className="text-xs text-gray-500 mt-1">dias seguidos de treino</p>
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+            {streak === 1 ? "dia seguido de treino" : "dias seguidos de treino"}
+          </p>
         </div>
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
-          <p className="text-3xl font-bold text-navy">{summary.exercisesCount}</p>
-          <p className="text-xs text-gray-500 mt-1">exercícios no protocolo</p>
+        <div className="rounded-xl border border-slate-100 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+          <p className="text-3xl font-bold text-navy dark:text-white">{summary.exercisesCount}</p>
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">exercícios no protocolo</p>
         </div>
       </div>
 
       {summary.lastWorkout && (
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
-          <p className="text-xs font-semibold text-gray-400 uppercase mb-1">Última sessão</p>
-          <p className="text-sm text-navy">
-            {new Date(summary.lastWorkout.date).toLocaleDateString("pt-BR")} · Dor relatada:{" "}
+        <div className="rounded-xl border border-slate-100 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+          <p className="mb-1 text-xs font-semibold uppercase text-slate-400">Última sessão</p>
+          <p className="text-sm text-navy dark:text-slate-100">
+            {formatDate(summary.lastWorkout.date)} · Dor relatada:{" "}
             <span className="font-bold">{summary.lastWorkout.painLevel}/10</span>
+            {summary.lastWorkout.swelling && <span className="font-semibold text-danger"> · com derrame</span>}
           </p>
         </div>
       )}
 
-      <div className="bg-danger/10 border border-danger/30 rounded-xl p-4">
-        <p className="text-xs font-bold text-danger uppercase mb-2">Sempre evite</p>
+      <section className="rounded-xl border border-danger/30 bg-danger/10 p-4">
+        <h2 className="mb-2 text-xs font-bold uppercase text-danger">Sempre evite</h2>
         <ul className="space-y-1">
           {summary.contraindications.map((c: string) => (
-            <li key={c} className="text-sm text-navy flex gap-1.5">
-              <span className="text-danger">✗</span> {c}
+            <li key={c} className="flex gap-1.5 text-sm text-navy dark:text-slate-100">
+              <span className="text-danger" aria-hidden="true">
+                ✗
+              </span>{" "}
+              {c}
             </li>
           ))}
         </ul>
-      </div>
+      </section>
 
       <Link
         href="/treino"
-        className="block text-center bg-brand text-white font-bold py-3.5 rounded-xl active:scale-[0.98] transition-transform"
+        className="block rounded-xl bg-brand py-3.5 text-center font-bold text-white transition-transform active:scale-[0.98]"
       >
-        Começar treino de hoje →
+        {doneToday ? "Rever o treino de hoje →" : "Começar treino de hoje →"}
       </Link>
+
+      {doneToday && (
+        <p className="text-center text-xs font-semibold text-okgreen">
+          ✓ Sessão de hoje já registrada — dor {summary.todaySession!.painLevel}/10
+        </p>
+      )}
     </div>
   );
 }

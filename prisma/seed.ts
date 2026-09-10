@@ -80,6 +80,7 @@ async function main() {
     templateGroup: "A" | "B" | null;
     phaseMin: number;
     progression: Record<string, { sets: number; reps: string; hold: number | null }>;
+    wgerExerciseId: number | null;
     wgerSearchTerm: string | null;
   };
 
@@ -112,6 +113,7 @@ async function main() {
         "2": { sets: 3, reps: "10-15 rep.", hold: 12 },
         "3": { sets: 3, reps: "15 rep.", hold: 15 },
       },
+      wgerExerciseId: null,
       wgerSearchTerm: null, // ROM crítica — só ilustração customizada
     },
     {
@@ -141,6 +143,7 @@ async function main() {
         "2": { sets: 3, reps: "12-15 rep.", hold: null },
         "3": { sets: 3, reps: "15 rep. + carga leve no tornozelo", hold: null },
       },
+      wgerExerciseId: null,
       wgerSearchTerm: null,
     },
     {
@@ -170,6 +173,7 @@ async function main() {
         "2": { sets: 2, reps: "12 rep., carga leve", hold: null },
         "3": { sets: 3, reps: "12-15 rep., carga progressiva", hold: null },
       },
+      wgerExerciseId: null,
       wgerSearchTerm: null, // existe versão genérica, mas mostra amplitude completa — perigoso
     },
     {
@@ -198,6 +202,7 @@ async function main() {
         "2": { sets: 2, reps: "3-4 sustentações", hold: 15 },
         "3": { sets: 3, reps: "4-5 sustentações", hold: 25 },
       },
+      wgerExerciseId: null,
       wgerSearchTerm: null, // wall sit genérico existe, mas em amplitude completa
     },
     {
@@ -227,7 +232,8 @@ async function main() {
         "2": { sets: 3, reps: "15 rep.", hold: null },
         "3": { sets: 3, reps: "15-20 rep., unilateral", hold: null },
       },
-      wgerSearchTerm: "calf raise",
+      wgerExerciseId: 622, // "Standing Calf Raises" — em pé, bilateral: bate com a execução daqui
+      wgerSearchTerm: "Standing Calf Raises",
     },
     {
       slug: "ponte-gluteo",
@@ -256,7 +262,8 @@ async function main() {
         "2": { sets: 3, reps: "12-15 rep.", hold: null },
         "3": { sets: 3, reps: "15 rep. + pausa de 2s no topo", hold: null },
       },
-      wgerSearchTerm: "glute bridge",
+      wgerExerciseId: 265, // "Glute Bridge" — foto real, movimento idêntico ao descrito
+      wgerSearchTerm: "Glute Bridge",
     },
     {
       slug: "elevacao-pelvica-unilateral",
@@ -283,7 +290,10 @@ async function main() {
       progression: {
         "3": { sets: 3, reps: "10-12 por lado", hold: null },
       },
-      wgerSearchTerm: "single leg glute bridge",
+      // wger 1740 ("Single Leg Glute Bridge") existe mas NÃO tem nenhuma imagem
+      // cadastrada — sem foto, não há o que buscar.
+      wgerExerciseId: null,
+      wgerSearchTerm: null,
     },
     {
       slug: "cadeira-flexora",
@@ -310,7 +320,11 @@ async function main() {
         "2": { sets: 2, reps: "12 rep., carga leve", hold: null },
         "3": { sets: 3, reps: "12-15 rep.", hold: null },
       },
-      wgerSearchTerm: "leg curl",
+      // ATENÇÃO: wger 366 se chama "Leg Curls (sitting)", mas a ilustração
+      // cadastrada mostra uma CADEIRA EXTENSORA — que está nas contraindicações
+      // do laudo. Imagem verificada e rejeitada de propósito.
+      wgerExerciseId: null,
+      wgerSearchTerm: null,
     },
     {
       slug: "abducao-quadril",
@@ -338,7 +352,8 @@ async function main() {
         "2": { sets: 2, reps: "12 por lado", hold: null },
         "3": { sets: 3, reps: "15 por lado", hold: null },
       },
-      wgerSearchTerm: "hip abduction",
+      wgerExerciseId: 1748, // "Machine Hip Abduction" — a execução daqui já prevê o aparelho
+      wgerSearchTerm: "Machine Hip Abduction",
     },
     {
       slug: "extensao-quadril-cabo",
@@ -364,7 +379,10 @@ async function main() {
       progression: {
         "3": { sets: 3, reps: "12-15 por lado", hold: null },
       },
-      wgerSearchTerm: "cable hip extension",
+      // Não existe "cable hip extension" na wger; as alternativas são coice
+      // ajoelhado ou com elástico — outra posição/equipamento, informação errada.
+      wgerExerciseId: null,
+      wgerSearchTerm: null,
     },
     {
       slug: "prancha",
@@ -392,7 +410,8 @@ async function main() {
         "2": { sets: 3, reps: "3-4 sustentações", hold: 25 },
         "3": { sets: 3, reps: "4 sustentações", hold: 40 },
       },
-      wgerSearchTerm: "plank",
+      wgerExerciseId: 458, // "Plank" — prancha de antebraço, exatamente o exercício
+      wgerSearchTerm: "Plank",
     },
   ];
 
@@ -426,8 +445,14 @@ async function main() {
     { listType: "EVITAR", order: 5, nutrient: "Excesso de sódio e embutidos", sources: "Salsicha, presunto, salgados prontos, temperos industrializados", note: "Favorece retenção de líquido e pode piorar o derrame articular" },
     { listType: "EVITAR", order: 6, nutrient: "Ultraprocessados em geral", sources: "Aditivos e conservantes diversos", note: "Associados a maior atividade inflamatória sistêmica" },
   ];
+  // upsert (e não create) para o seed poder rodar quantas vezes for necessário:
+  // a versão anterior duplicava a lista inteira de nutrição a cada execução.
   for (const f of foods) {
-    await prisma.foodItem.create({ data: f });
+    await prisma.foodItem.upsert({
+      where: { listType_nutrient: { listType: f.listType, nutrient: f.nutrient } },
+      update: f,
+      create: f,
+    });
   }
 
   console.log("Seeding: lista de mercado...");
@@ -439,15 +464,21 @@ async function main() {
     { name: "Óleos, temperos e outros", isAvoidList: false, order: 5, items: ["Azeite de oliva extravirgem (uso a frio)", "Pimenta-do-reino moída", "Chá verde ou matcha", "Água de coco", "Ossos para caldo (bone broth)", "Gelatina incolor sem açúcar (opcional)"] },
     { name: "Evitar no carrinho", isAvoidList: true, order: 6, items: ["Refrigerantes e sucos industrializados", "Salgadinhos e frituras industrializadas", "Margarina e gorduras trans", "Embutidos (salsicha, presunto, mortadela)", "Pão branco e massas refinadas em excesso", "Molhos prontos com excesso de sódio/açúcar"] },
   ];
+  // Idempotente e NÃO-DESTRUTIVO: o `update` do item não toca em `checked`, então
+  // rodar o seed de novo não desmarca o que já foi comprado.
   for (const cat of marketCategories) {
-    const created = await prisma.shoppingCategory.create({
-      data: { name: cat.name, isAvoidList: cat.isAvoidList, order: cat.order },
+    const category = await prisma.shoppingCategory.upsert({
+      where: { name: cat.name },
+      update: { isAvoidList: cat.isAvoidList, order: cat.order },
+      create: { name: cat.name, isAvoidList: cat.isAvoidList, order: cat.order },
     });
     let i = 0;
     for (const itemName of cat.items) {
       i++;
-      await prisma.shoppingItem.create({
-        data: { categoryId: created.id, name: itemName, order: i, userId: user.id },
+      await prisma.shoppingItem.upsert({
+        where: { categoryId_name: { categoryId: category.id, name: itemName } },
+        update: { order: i, userId: user.id },
+        create: { categoryId: category.id, name: itemName, order: i, userId: user.id },
       });
     }
   }
