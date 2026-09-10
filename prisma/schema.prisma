@@ -5,19 +5,17 @@ generator client {
 datasource db {
   provider = "postgresql"
 
-  // url: conexão POOLED — usada pelo app em runtime. Cada função serverless
-  // abre conexões curtas e em grande número; sem o pooler o Postgres estoura o
-  // limite de conexões.
-  url = env("DATABASE_URL")
-
-  // directUrl: conexão DIRETA (sem pooler) — usada só pelo Prisma CLI em
-  // `migrate deploy`, que roda no build. Migration através do PgBouncer falha:
-  // ela precisa de advisory locks e de sessão estável, que o pooler em modo
-  // transação não oferece.
+  // Uma única variável, a conexão POOLED, que é a que o app usa em runtime:
+  // funções serverless abrem muitas conexões curtas e sem o pooler o Postgres
+  // estoura o limite.
   //
-  // Os dois nomes são exatamente os que a integração Postgres da Vercel (Neon)
-  // injeta sozinha no projeto — não há nada para configurar à mão no deploy.
-  directUrl = env("DATABASE_URL_UNPOOLED")
+  // Migration precisa de conexão DIRETA (advisory lock e sessão estável, que o
+  // PgBouncer em modo transação não oferece), mas isso NÃO vira um `directUrl`
+  // aqui: o nome da variável com a conexão direta muda conforme a integração
+  // (DATABASE_URL_UNPOOLED, POSTGRES_URL_NON_POOLING...), e declarar um nome
+  // fixo faz o build quebrar em qualquer ambiente que use outro.
+  // Quem resolve isso é scripts/migrate-deploy.js, no momento da migration.
+  url = env("DATABASE_URL")
 }
 
 // ---------------------------------------------------------------------------

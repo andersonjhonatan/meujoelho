@@ -193,21 +193,33 @@ git push origin main
 ```
 
 ### 2. Crie o banco
-No dashboard da Vercel → **Storage** → **Create Database** → **Postgres (Neon)** → conecte ao projeto.
+No dashboard da Vercel → **Storage** → **Create Database** → **Postgres** → conecte ao projeto.
 
-A integração injeta sozinha as duas variáveis que o projeto usa — **não há nada para configurar à mão**:
+A integração preenche `DATABASE_URL` sozinha, e essa é a **única variável obrigatória**.
 
-| Variável | O que é | Quem usa |
-|---|---|---|
-| `DATABASE_URL` | conexão *pooled* | o app em runtime |
-| `DATABASE_URL_UNPOOLED` | conexão *direta* | `prisma migrate deploy`, no build |
+<details>
+<summary>Por que não é preciso configurar a conexão direta</summary>
 
-As duas são necessárias e cumprem papéis diferentes. Serverless abre muitas conexões curtas e sem o
-pooler o Postgres estoura o limite; já migration **não funciona** através do pooler, porque precisa de
-advisory lock e sessão estável. Por isso o `schema.prisma` declara `url` e `directUrl` separados.
+O app precisa de duas conexões diferentes. Em runtime, a **pooled**: funções serverless abrem muitas
+conexões curtas e sem o pooler o Postgres estoura o limite. Já `prisma migrate deploy` precisa da
+**direta**, porque migration usa advisory lock e sessão estável, que o PgBouncer em modo transação não
+oferece.
 
-> Se a sua integração expuser os nomes antigos (`POSTGRES_PRISMA_URL` e `POSTGRES_URL_NON_POOLING`),
-> crie `DATABASE_URL` e `DATABASE_URL_UNPOOLED` manualmente apontando para esses mesmos valores.
+O nome da variável com a conexão direta muda conforme o provedor e a época da integração
+(`DATABASE_URL_UNPOOLED`, `POSTGRES_URL_NON_POOLING`, `DIRECT_DATABASE_URL`...). Declarar um nome fixo
+em `directUrl` no schema faz o build quebrar com erro **P1012** em qualquer ambiente que use outro
+nome — foi exatamente o que aconteceu no primeiro deploy deste projeto.
+
+Por isso o `schema.prisma` declara só `DATABASE_URL`, e `scripts/migrate-deploy.js` resolve a conexão
+direta no momento da migration, nesta ordem:
+
+1. `DATABASE_URL_UNPOOLED` · 2. `POSTGRES_URL_NON_POOLING` · 3. `DIRECT_DATABASE_URL` · 4. `DIRECT_URL`
+5. deriva de `DATABASE_URL` removendo o sufixo `-pooler` do host (convenção do Neon)
+6. usa a própria `DATABASE_URL` (bancos sem pooler)
+
+O build imprime qual origem usou. A regra está coberta por testes em `tests/migrate-deploy.test.ts`.
+
+</details>
 
 ### 3. Importe o projeto
 **Add New → Project** → selecione o repositório → **Deploy**.
@@ -220,9 +232,7 @@ O seed **não** roda no build (o build não deve escrever conteúdo). Rode uma v
 apontando para o banco de produção sem alterar o seu `.env`:
 
 ```bash
-DATABASE_URL="<cole a DATABASE_URL da Vercel>" \
-DATABASE_URL_UNPOOLED="<cole a DATABASE_URL_UNPOOLED da Vercel>" \
-npm run db:seed
+DATABASE_URL="<cole a DATABASE_URL da Vercel>" npm run db:seed
 ```
 
 Variável passada na linha de comando tem precedência sobre o `.env`, então o seu ambiente local
