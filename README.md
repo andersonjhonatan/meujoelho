@@ -269,6 +269,17 @@ PWA. A capa de entrada é a primeira tela.
 `git push` — a Vercel reconstrói e aplica migrations pendentes sozinha. Só rode o seed de novo quando
 o **conteúdo clínico** mudar (exercícios, nutrição, medicação), o que não acontece a cada deploy.
 
+## Se o deploy falhar
+
+| Erro no log | O que é | O que fazer |
+|---|---|---|
+| `DATABASE_URL não está definida` | banco não conectado ao projeto | Storage → Create Database → conectar ao projeto → Redeploy. O log lista os nomes das variáveis de banco que existem, se houver |
+| `P3009 · migrate found failed migrations` | uma tentativa anterior deixou migration marcada como falha, o que bloqueia todas as seguintes | num banco ainda sem dados, o caminho limpo é recriar: `DATABASE_URL="<a da Vercel>" npm run db:reset` (apaga tudo, aplica as migrations e semeia) |
+| `DATABASE_URL está no formato do Prisma Accelerate` | o banco escolhido devolve `prisma+postgres://` | troque por um Postgres TCP (Neon) ou use a connection string direta do Prisma Console |
+| `relation "X" does not exist` aplicando migration | ordem das migrations quebrada | `npm run test` acusa: o timestamp da pasta precisa refletir a ordem de dependência |
+
+`npm run db:reset` é **destrutivo** — recria o schema do zero. Só use em banco sem dado que importe.
+
 ## Importante
 
 Este é material de apoio educativo. A progressão de fases é uma estrutura sensata baseada em

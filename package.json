@@ -7,7 +7,7 @@
   },
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && node scripts/migrate-deploy.js && next build",
+    "build": "prisma generate && node scripts/prisma-direct.js && next build",
     "start": "next start",
     "lint": "eslint . --ext .ts,.tsx --max-warnings 0",
     "test": "node --experimental-strip-types --test \"tests/*.test.ts\"",
@@ -16,10 +16,12 @@
     "postinstall": "prisma generate",
     "db:up": "docker compose up -d",
     "db:migrate": "prisma migrate dev",
-    "db:deploy": "node scripts/migrate-deploy.js",
+    "db:deploy": "node scripts/prisma-direct.js",
     "db:seed": "prisma db seed",
     "db:studio": "prisma studio",
-    "db:setup": "node scripts/migrate-deploy.js && prisma db seed"
+    "db:setup": "node scripts/prisma-direct.js && prisma db seed",
+    "db:reset": "node scripts/prisma-direct.js migrate reset --force",
+    "db:resolve": "node scripts/prisma-direct.js migrate resolve"
   },
   "prisma": {
     "seed": "ts-node --compiler-options {\"module\":\"CommonJS\"} prisma/seed.ts"

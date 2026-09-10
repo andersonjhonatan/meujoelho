@@ -1,6 +1,10 @@
 #!/usr/bin/env node
 /**
- * Aplica as migrations pendentes usando a conexão DIRETA do banco.
+ * Roda um comando do Prisma CLI usando a conexão DIRETA do banco.
+ *
+ *   node scripts/prisma-direct.js                          → migrate deploy
+ *   node scripts/prisma-direct.js migrate reset --force    → recria o banco
+ *   node scripts/prisma-direct.js migrate resolve --applied <nome>
  *
  * Por que isto existe, em vez de um `directUrl` no schema.prisma:
  *
@@ -120,7 +124,7 @@ function variaveisDeBancoPresentes() {
 function abortarSemDatabaseUrl() {
   const presentes = variaveisDeBancoPresentes();
 
-  console.error("[migrate] DATABASE_URL não está definida neste ambiente.\n");
+  console.error("[prisma] DATABASE_URL não está definida neste ambiente.\n");
 
   if (presentes.length === 0) {
     console.error(
@@ -155,7 +159,7 @@ function validarProtocolo(url) {
   if (!url.startsWith("prisma+postgres://") && !url.startsWith("prisma://")) return;
 
   console.error(
-    "[migrate] DATABASE_URL está no formato do Prisma Accelerate " +
+    "[prisma] DATABASE_URL está no formato do Prisma Accelerate " +
       `(${url.slice(0, url.indexOf("://") + 3)}...), que este projeto não usa.\n\n` +
       "          Accelerate fala HTTP, não Postgres, e exige @prisma/extension-accelerate\n" +
       "          no client — migration não roda por essa URL.\n\n" +
@@ -174,10 +178,14 @@ function main() {
   if (!process.env.DATABASE_URL) abortarSemDatabaseUrl();
   validarProtocolo(process.env.DATABASE_URL);
 
-  const { url, origem } = resolverUrlDireta();
-  console.log(`[migrate] conexão direta: ${origem}`);
+  // Sem argumentos, o padrão é `migrate deploy` — que é o uso no build.
+  const args = process.argv.slice(2);
+  const comando = args.length > 0 ? args : ["migrate", "deploy"];
 
-  const resultado = spawnSync(...comandoPrisma(["migrate", "deploy"]), {
+  const { url, origem } = resolverUrlDireta();
+  console.log(`[prisma] ${comando.join(" ")} · conexão direta: ${origem}`);
+
+  const resultado = spawnSync(...comandoPrisma(comando), {
     stdio: "inherit",
     // A migration roda na conexão direta; o app em runtime continua no pooler,
     // porque esta troca vale só para este processo filho.
@@ -185,7 +193,7 @@ function main() {
   });
 
   if (resultado.error) {
-    console.error("[migrate] não foi possível executar o Prisma CLI:", resultado.error.message);
+    console.error("[prisma] não foi possível executar o Prisma CLI:", resultado.error.message);
     process.exit(1);
   }
   process.exit(resultado.status ?? 1);

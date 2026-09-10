@@ -9,7 +9,7 @@ const {
   variaveisDeBancoPresentes,
   validarProtocolo,
   DIRECT_URL_VARS,
-} = require("../scripts/migrate-deploy.js");
+} = require("../scripts/prisma-direct.js");
 
 /**
  * Estes testes existem por causa de um deploy real que quebrou: o schema
