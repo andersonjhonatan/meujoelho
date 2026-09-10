@@ -103,17 +103,48 @@ function comandoPrisma(args) {
   }
 }
 
+/**
+ * Nomes (NUNCA valores) das variáveis de ambiente que parecem ser de banco.
+ *
+ * Serve para diagnosticar deploy: quando DATABASE_URL falta, saber o que a
+ * integração de fato criou responde a pergunta em um log, em vez de exigir uma
+ * rodada de adivinhação. Só os nomes são impressos — connection string é
+ * segredo e não pode aparecer em log de build.
+ */
+function variaveisDeBancoPresentes() {
+  return Object.keys(process.env)
+    .filter((nome) => /^(DATABASE|POSTGRES|PG|NEON|SUPABASE)/i.test(nome))
+    .sort();
+}
+
+function abortarSemDatabaseUrl() {
+  const presentes = variaveisDeBancoPresentes();
+
+  console.error("[migrate] DATABASE_URL não está definida neste ambiente.\n");
+
+  if (presentes.length === 0) {
+    console.error(
+      "          Nenhuma variável de banco foi encontrada no ambiente.\n" +
+        "          Na Vercel: Storage → Create Database → Postgres, e conecte ao projeto.\n" +
+        "          Depois de conectar, rode o deploy de novo (Deployments → Redeploy).\n" +
+        "          Localmente: copie .env.example para .env e rode `npm run db:up`."
+    );
+  } else {
+    console.error(
+      "          O ambiente TEM variáveis de banco, mas nenhuma se chama DATABASE_URL:\n" +
+        presentes.map((nome) => `            - ${nome}`).join("\n") +
+        "\n\n          O schema.prisma referencia env(\"DATABASE_URL\"), então este nome é\n" +
+        "          obrigatório também em runtime. Em Settings → Environment Variables,\n" +
+        "          crie DATABASE_URL com o mesmo valor da variável pooled acima."
+    );
+  }
+  process.exit(1);
+}
+
 function main() {
   carregarEnvLocal();
 
-  if (!process.env.DATABASE_URL) {
-    console.error(
-      "[migrate] DATABASE_URL não está definida.\n" +
-        "         Na Vercel, conecte um banco Postgres ao projeto em Storage → Create Database.\n" +
-        "         Localmente, copie .env.example para .env e rode `npm run db:up`."
-    );
-    process.exit(1);
-  }
+  if (!process.env.DATABASE_URL) abortarSemDatabaseUrl();
 
   const { url, origem } = resolverUrlDireta();
   console.log(`[migrate] conexão direta: ${origem}`);
@@ -135,4 +166,4 @@ function main() {
 // Só executa quando chamado direto; importado, expõe a lógica para os testes.
 if (require.main === module) main();
 
-module.exports = { derivarDoPooler, resolverUrlDireta, DIRECT_URL_VARS };
+module.exports = { derivarDoPooler, resolverUrlDireta, variaveisDeBancoPresentes, DIRECT_URL_VARS };

@@ -192,10 +192,17 @@ joelho-vercel/
 git push origin main
 ```
 
-### 2. Crie o banco
-No dashboard da Vercel → **Storage** → **Create Database** → **Postgres** → conecte ao projeto.
+### 2. Crie o banco e **conecte ao projeto**
+No dashboard da Vercel → **Storage** → **Create Database** → **Postgres**. Em seguida, na aba
+**Projects** do banco, conecte-o a este projeto — é esse passo que cria as variáveis de ambiente.
+Bancos criados mas não conectados não expõem variável nenhuma, e o build falha por falta de
+`DATABASE_URL`.
 
-A integração preenche `DATABASE_URL` sozinha, e essa é a **única variável obrigatória**.
+`DATABASE_URL` é a **única variável obrigatória**, e a conexão preenche ela sozinha. Se o seu projeto
+já existia antes de conectar o banco, rode um **Redeploy** para o build enxergar as variáveis novas.
+
+Se o build falhar por falta de `DATABASE_URL`, o log lista os nomes das variáveis de banco que
+existem no ambiente (só os nomes — connection string não vai para log) e diz o que fazer com elas.
 
 <details>
 <summary>Por que não é preciso configurar a conexão direta</summary>

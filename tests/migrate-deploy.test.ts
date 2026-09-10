@@ -3,7 +3,8 @@ import { test } from "node:test";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
-const { derivarDoPooler, resolverUrlDireta, DIRECT_URL_VARS } = require("../scripts/migrate-deploy.js");
+const { derivarDoPooler, resolverUrlDireta, variaveisDeBancoPresentes, DIRECT_URL_VARS } =
+  require("../scripts/migrate-deploy.js");
 
 /**
  * Estes testes existem por causa de um deploy real que quebrou: o schema
@@ -68,4 +69,16 @@ test("sem variável explícita, cai na própria DATABASE_URL", () => {
   );
   assert.equal(resultado.url, "postgresql://joelho@localhost:5434/joelho");
   assert.match(resultado.origem, /sem pooler/);
+});
+
+test("diagnóstico lista nomes de variáveis de banco, nunca valores", () => {
+  const nomes = comAmbiente(
+    { DATABASE_URL: "postgres://segredo", POSTGRES_URL_NON_POOLING: "postgres://outro", HOME_TESTE: "x" },
+    () => variaveisDeBancoPresentes()
+  );
+  assert.ok(nomes.includes("DATABASE_URL"));
+  assert.ok(nomes.includes("POSTGRES_URL_NON_POOLING"));
+  assert.ok(!nomes.includes("HOME_TESTE"), "só variáveis de banco entram na lista");
+  // A connection string é segredo: o diagnóstico não pode vazá-la em log de build.
+  assert.ok(!nomes.some((n: string) => n.includes("segredo") || n.includes("postgres://")));
 });
